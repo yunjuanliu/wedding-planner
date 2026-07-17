@@ -1,0 +1,891 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Wedding planner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #F8F7FC;
+    --surface: #FFFFFF;
+    --ink: #1D1B29;
+    --ink-soft: #6F6C81;
+    --primary: #6E4CD9;
+    --primary-hover: #5D3FC0;
+    --primary-light: #EFEAFB;
+    --border: #E7E4F1;
+    --white: #FFFFFF;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Inter", -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    padding: 28px 20px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 780px; margin: 0 auto; }
+  h1 {
+    font-family: "Inter", sans-serif;
+    font-weight: 700;
+    font-size: 26px;
+    margin: 0 0 4px;
+    letter-spacing: -0.4px;
+  }
+  .sub { color: var(--ink-soft); font-size: 14px; margin: 0 0 24px; }
+  .tabs {
+    display: flex;
+    gap: 4px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 4px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+  }
+  .tab {
+    padding: 9px 16px;
+    font-size: 13.5px;
+    font-weight: 500;
+    color: var(--ink-soft);
+    cursor: pointer;
+    border-radius: 8px;
+    user-select: none;
+    transition: background 0.15s, color 0.15s;
+  }
+  .tab:hover { color: var(--ink); }
+  .tab.active { color: var(--white); background: var(--primary); font-weight: 600; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 18px 20px;
+    margin-bottom: 14px;
+    box-shadow: 0 1px 2px rgba(28, 27, 41, 0.03);
+  }
+  .stat-row { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+  .stat {
+    flex: 1;
+    min-width: 110px;
+    background: var(--primary-light);
+    border-radius: 12px;
+    padding: 13px 15px;
+  }
+  .stat .num { font-size: 21px; font-weight: 700; color: var(--primary); letter-spacing: -0.3px; }
+  .stat .lbl { font-size: 12px; color: var(--ink-soft); margin-top: 1px; }
+  .progress-bar { height: 8px; border-radius: 5px; background: var(--primary-light); overflow: hidden; }
+  .progress-fill { height: 100%; background: var(--primary); border-radius: 5px; transition: width 0.3s; }
+  input[type=text], input[type=number], input[type=date], select {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 14px;
+    font-family: inherit;
+    background: var(--white);
+    color: var(--ink);
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  input[type=text]:focus, input[type=number]:focus, input[type=date]:focus, select:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px var(--primary-light);
+  }
+  input[type=checkbox] { accent-color: var(--primary); width: 17px; height: 17px; }
+  button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+  }
+  ::placeholder { color: #A6A3B6; }
+  button {
+    border: 1px solid var(--border);
+    background: var(--white);
+    color: var(--ink);
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 13.5px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    font-family: inherit;
+    min-height: 36px;
+  }
+  button:hover { background: var(--primary-light); border-color: var(--primary); }
+  button.primary { background: var(--primary); color: var(--white); border-color: var(--primary); }
+  button.primary:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
+  .icon-btn { padding: 6px 10px; border-color: transparent; color: var(--ink-soft); min-height: 32px; }
+  .icon-btn:hover { background: var(--primary-light); color: var(--primary); border-color: transparent; }
+  @media (max-width: 480px) {
+    body { padding: 16px 12px; }
+    .stat-row { gap: 8px; }
+    .stat { min-width: 100%; }
+    .item-row { gap: 6px; }
+  }
+  .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .item-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+  }
+  .item-row:last-child { border-bottom: none; }
+  .section-title {
+    font-family: "Inter", sans-serif;
+    font-weight: 600;
+    font-size: 15px;
+    margin: 0 0 8px;
+    color: var(--ink);
+  }
+  .muted { color: var(--ink-soft); font-size: 13px; }
+  .strike { color: var(--ink-soft); text-decoration: line-through; }
+  .add-form { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+  .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+  table.data-table { border-collapse: collapse; width: 100%; min-width: 760px; font-size: 13.5px; }
+  table.data-table th {
+    text-align: left; padding: 10px 10px; background: var(--primary-light); color: var(--primary);
+    font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.3px;
+    white-space: nowrap; position: sticky; top: 0;
+  }
+  table.data-table td { padding: 6px 8px; border-top: 1px solid var(--border); vertical-align: middle; }
+  table.data-table tr:hover td { background: #FBFAFE; }
+  table.data-table input[type=text], table.data-table input[type=number] {
+    border: 1px solid transparent; background: transparent; width: 100%; padding: 6px 6px; border-radius: 6px;
+  }
+  table.data-table input[type=text]:hover, table.data-table input[type=number]:hover { border-color: var(--border); }
+  table.data-table input[type=text]:focus, table.data-table input[type=number]:focus { background: var(--white); border-color: var(--primary); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Wedding planner</h1>
+  <p class="sub">Everything in one place, saved automatically as you go.</p>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="dashboard">Dashboard</div>
+    <div class="tab" data-tab="todo">To-do</div>
+    <div class="tab" data-tab="guests">Guest count</div>
+    <div class="tab" data-tab="budget">Budget</div>
+    <div class="tab" data-tab="shoplist">Shop list</div>
+    <div class="tab" data-tab="activities">Activity table</div>
+    <div class="tab" data-tab="timeline">Timeline</div>
+    <div class="tab" data-tab="dress">Dress</div>
+  </div>
+
+  <div id="panel-dashboard" class="panel active"></div>
+  <div id="panel-todo" class="panel"></div>
+  <div id="panel-guests" class="panel"></div>
+  <div id="panel-budget" class="panel"></div>
+  <div id="panel-shoplist" class="panel"></div>
+  <div id="panel-activities" class="panel"></div>
+  <div id="panel-timeline" class="panel"></div>
+  <div id="panel-dress" class="panel"></div>
+</div>
+
+<script>
+function goToTab(name) {
+  document.querySelectorAll(".tab").forEach(x => x.classList.remove("active"));
+  document.querySelectorAll(".panel").forEach(x => x.classList.remove("active"));
+  document.querySelector(`.tab[data-tab="${name}"]`).classList.add("active");
+  document.getElementById("panel-" + name).classList.add("active");
+  if (name === "dashboard") renderDashboard();
+}
+
+document.querySelectorAll(".tab").forEach(t => {
+  t.addEventListener("click", () => goToTab(t.dataset.tab));
+});
+
+function uid() { return Math.random().toString(36).slice(2, 9); }
+async function saveKey(key, value) {
+  try { await window.storage.set(key, JSON.stringify(value)); } catch (e) {}
+}
+async function loadKey(key) {
+  try {
+    const r = await window.storage.get(key);
+    return r && r.value ? JSON.parse(r.value) : null;
+  } catch (e) { return null; }
+}
+
+const TODO_DEFAULTS = [
+  {id:"s1", label:"8-10 weeks out", items:["Confirm final guest headcount","Send invitations","Book hair and makeup trial","Order wedding bands","Finalize menu and tasting","Book rehearsal dinner venue","Confirm officiant and ceremony details","Arrange transportation for wedding day"]},
+  {id:"s2", label:"4-6 weeks out", items:["Finalize floral order","Confirm contracts and final payments with vendors","Write vows","Draft day-of timeline","Order or assemble favors","Schedule final dress or suit fitting","Block hotel rooms for out-of-town guests","Finalize music and playlist with DJ or band","Check your state's marriage license requirements and timing"]},
+  {id:"s3", label:"2-3 weeks out", items:["Give final headcount to caterer and venue","Confirm arrival times with every vendor","Finalize seating chart","Prepare tip and final payment envelopes","Pick up rings","Break in wedding shoes","Pack for honeymoon","Assign day-of tasks to a helper or coordinator"]},
+  {id:"s4", label:"Week of", items:["Rehearsal and rehearsal dinner","Confirm delivery times for flowers, cake, rentals","Pick up final alterations","Pack an emergency kit","Reconfirm transportation and timeline with vendors","Get marriage license if required in this window"]},
+  {id:"s5", label:"Day before", items:["Delegate decor and setup to helpers","Pack overnight and getting-ready bags","Eat, hydrate, and get real sleep","Do a final walk-through with your coordinator or venue"]},
+  {id:"s6", label:"Day of", items:["Eat breakfast","Give emergency kit to a helper","Follow the hair, makeup, and photo timeline","Enjoy it"]},
+];
+let todoData = [];
+let todoState = {};
+let helperTags = [];
+
+function renderTodo() {
+  const p = document.getElementById("panel-todo");
+  let totalDone = 0, totalItems = 0;
+  todoData.forEach(s => { s.items.forEach(item => { totalItems++; if (todoState[item.id]) totalDone++; }); });
+  let html = `<div class="stat-row">
+    <div class="stat"><div class="num">${totalDone} / ${totalItems}</div><div class="lbl">Tasks done</div></div>
+    <div class="stat" style="flex:2; display:flex; flex-direction:column; justify-content:center;">
+      <div class="progress-bar"><div class="progress-fill" style="width:${totalItems ? Math.round(totalDone/totalItems*100) : 0}%"></div></div>
+    </div>
+  </div>
+  <div class="row" style="margin-bottom:10px;">
+    <button id="tag-add" style="display:inline-flex; align-items:center; gap:6px;">+ Add tag</button>
+  </div>
+  <div class="row" style="margin-bottom:16px; flex-wrap:wrap; gap:6px;">
+    ${helperTags.length === 0 ? '<span class="muted">No helper tags yet. Add one above.</span>' : helperTags.map(t => `
+      <span style="display:inline-flex; align-items:center; gap:6px; background:var(--primary-light); color:var(--primary); border-radius:14px; padding:4px 10px; font-size:13px; font-weight:500;">
+        ${t.name}
+        <button data-remove-tag="${t.id}" aria-label="Remove ${t.name}" style="border:none; background:none; padding:0; color:var(--ink-soft); cursor:pointer; font-size:14px; line-height:1;">×</button>
+      </span>`).join("")}
+  </div>`;
+  todoData.forEach(s => {
+    const done = s.items.filter(item => todoState[item.id]).length;
+    html += `<div class="card"><div class="row" style="justify-content:space-between; margin-bottom:6px;">
+      <p class="section-title">${s.label}</p><span class="muted">${done}/${s.items.length}</span></div>`;
+    s.items.forEach(item => {
+      const checked = !!todoState[item.id];
+      const assignee = item.assignee || "";
+      const options = ["<option value=\"\">Unassigned</option>"]
+        .concat(helperTags.map(t => `<option value="${t.name}" ${assignee===t.name?"selected":""}>${t.name}</option>`))
+        .join("");
+      html += `<div class="item-row">
+        <label style="display:flex; align-items:center; gap:10px; flex:1; min-width:160px; cursor:pointer;">
+          <input type="checkbox" data-key="${item.id}" ${checked ? "checked" : ""} style="width:16px; height:16px;" />
+          <span class="${checked ? "strike" : ""}">${item.text}</span>
+        </label>
+        <select data-assign-section="${s.id}" data-assign-item="${item.id}" style="flex:0 0 150px;">${options}</select>
+        <button class="icon-btn" data-remove-section="${s.id}" data-remove-item="${item.id}">Remove</button>
+      </div>`;
+    });
+    html += `<div class="add-form" style="margin:10px 0 0;">
+      <input type="text" data-add-section="${s.id}" placeholder="Add a task" style="flex:1; min-width:150px;" />
+      <button data-add-btn="${s.id}">Add task</button>
+    </div></div>`;
+  });
+  p.innerHTML = html;
+
+  p.querySelectorAll("input[type=checkbox]").forEach(cb => {
+    cb.addEventListener("change", async (e) => {
+      todoState[e.target.dataset.key] = e.target.checked;
+      await saveKey("wedding-checklist", todoState);
+      renderTodo();
+    });
+  });
+  document.getElementById("tag-add").addEventListener("click", async () => {
+    const name = (window.prompt("Helper name") || "").trim();
+    if (!name) return;
+    helperTags.push({id: uid(), name});
+    await saveKey("wedding-helper-tags", helperTags);
+    renderTodo();
+  });
+  p.querySelectorAll("[data-remove-tag]").forEach(btn => {
+    btn.addEventListener("click", async (e) => {
+      const tagId = e.target.dataset.removeTag;
+      const removed = helperTags.find(t => t.id === tagId);
+      helperTags = helperTags.filter(t => t.id !== tagId);
+      if (removed) {
+        todoData.forEach(s => s.items.forEach(item => {
+          if (item.assignee === removed.name) item.assignee = "";
+        }));
+        await saveKey("wedding-todo-items", todoData);
+      }
+      await saveKey("wedding-helper-tags", helperTags);
+      renderTodo();
+    });
+  });
+  p.querySelectorAll("[data-assign-item]").forEach(sel => {
+    sel.addEventListener("change", async (e) => {
+      const sectionId = e.target.dataset.assignSection;
+      const itemId = e.target.dataset.assignItem;
+      const section = todoData.find(s => s.id === sectionId);
+      const item = section.items.find(i => i.id === itemId);
+      item.assignee = e.target.value;
+      await saveKey("wedding-todo-items", todoData);
+      renderTodo();
+    });
+  });
+  p.querySelectorAll("[data-remove-item]").forEach(btn => {
+    btn.addEventListener("click", async (e) => {
+      const sectionId = e.target.dataset.removeSection;
+      const itemId = e.target.dataset.removeItem;
+      const section = todoData.find(s => s.id === sectionId);
+      section.items = section.items.filter(i => i.id !== itemId);
+      delete todoState[itemId];
+      await saveKey("wedding-todo-items", todoData);
+      await saveKey("wedding-checklist", todoState);
+      renderTodo();
+    });
+  });
+  p.querySelectorAll("[data-add-btn]").forEach(btn => {
+    btn.addEventListener("click", async (e) => {
+      const sectionId = e.target.dataset.addBtn;
+      const input = p.querySelector(`[data-add-section="${sectionId}"]`);
+      const text = input.value.trim();
+      if (!text) return;
+      const section = todoData.find(s => s.id === sectionId);
+      section.items.push({id: uid(), text, assignee: ""});
+      await saveKey("wedding-todo-items", todoData);
+      renderTodo();
+    });
+  });
+}
+
+const GUEST_SEED = [
+  {name:"Xiaoming Gu Family", partySize:4, plusOne:"Wen Zhang, Ethan Gu, Lingxuan Gu", transport:"Driving", accommodation:"", dietary:"", mailed:true},
+  {name:"Xinhuan Chen", partySize:1, plusOne:"", transport:"Flying", accommodation:"Shared Rooms / Hotel Block", dietary:"", mailed:true},
+  {name:"Xia Qian", partySize:2, plusOne:"Mike", transport:"Driving", accommodation:"", dietary:"", mailed:true},
+  {name:"Krystal Zheng", partySize:2, plusOne:"Kevin Von", transport:"Driving", accommodation:"", dietary:"", mailed:true},
+  {name:"Leo Liu", partySize:2, plusOne:"Shuyi Liu", transport:"Driving", accommodation:"", dietary:"", mailed:true},
+  {name:"Sherry Eckholm", partySize:2, plusOne:"Hans Eckholm", transport:"Driving", accommodation:"", dietary:"", mailed:true},
+  {name:"Lan Liu", partySize:1, plusOne:"", transport:"Flying", accommodation:"Shared Rooms", dietary:"", mailed:true},
+  {name:"Fia Zhang", partySize:2, plusOne:"Wuqiong Shang", transport:"Driving", accommodation:"", dietary:"", mailed:true},
+  {name:"Koi Chen", partySize:1, plusOne:"", transport:"Flying", accommodation:"Outdoor Adventure / Shared Rooms", dietary:"", mailed:true},
+  {name:"Becky Splitt", partySize:2, plusOne:"Kelly Splitt", transport:"Driving", accommodation:"", dietary:"", mailed:true},
+  {name:"Yiting Cai", partySize:2, plusOne:"Di Yang (+ Sydney Yang)", transport:"Flying", accommodation:"Hotel Block", dietary:"", mailed:true},
+  {name:"Minami Knight", partySize:2, plusOne:"Justin Knight", transport:"Driving", accommodation:"", dietary:"", mailed:true},
+  {name:"Donal Warde", partySize:1, plusOne:"", transport:"Flying", accommodation:"Hotel Block", dietary:"", mailed:true},
+  {name:"Michelle Geneser", partySize:2, plusOne:"Josh Geneser", transport:"Driving", accommodation:"", dietary:"", mailed:true},
+  {name:"Stella Chen", partySize:2, plusOne:"Kevin Lu", transport:"Flying", accommodation:"Hotel Block", dietary:"", mailed:true},
+  {name:"Sindy Tsang", partySize:2, plusOne:"Jim Yi (+ Jasper Yi)", transport:"Driving", accommodation:"", dietary:"", mailed:true},
+  {name:"Will Turnage", partySize:2, plusOne:"Katina Paron", transport:"Flying", accommodation:"Hotel Block", dietary:"No restrictions", mailed:true},
+  {name:"Michael Smith", partySize:2, plusOne:"Laura Gunder", transport:"Driving", accommodation:"", dietary:"Laura: no red meat", mailed:true},
+  {name:"Dani Lai", partySize:4, plusOne:"Gene Hahn (+ Anna Hahn, Andrew Lai)", transport:"Driving", accommodation:"", dietary:"Gene: vegan, no eggs/dairy", mailed:true},
+  {name:"Raluca Dan", partySize:2, plusOne:"Paul Iordache", transport:"Driving", accommodation:"", dietary:"", mailed:true},
+  {name:"Qian Huang", partySize:2, plusOne:"Simon Bowler", transport:"Driving", accommodation:"", dietary:"", mailed:true},
+  {name:"Hailin Wang", partySize:1, plusOne:"", transport:"Flying", accommodation:"Shared Rooms (Airbnb)", dietary:"", mailed:true},
+  {name:"Urba Mandrekar", partySize:2, plusOne:"Kathan Amin", transport:"Flying", accommodation:"Hotel Block", dietary:"Urba: no beef/pork. Kathan: no beef", mailed:true},
+  {name:"Wang", partySize:2, plusOne:"Grace", transport:"", accommodation:"", dietary:"", mailed:true},
+  {name:"Autumn", partySize:1, plusOne:"", transport:"", accommodation:"", dietary:"", mailed:true},
+  {name:"Yuke", partySize:1, plusOne:"", transport:"", accommodation:"", dietary:"", mailed:true},
+  {name:"Tianguo", partySize:2, plusOne:"Juhua", transport:"", accommodation:"", dietary:"", mailed:true},
+  {name:"Tianjun", partySize:2, plusOne:"Jenny", transport:"", accommodation:"", dietary:"", mailed:true},
+  {name:"Aihua", partySize:1, plusOne:"", transport:"", accommodation:"", dietary:"", mailed:true},
+  {name:"Yueqing Wang", partySize:1, plusOne:"", transport:"Flying", accommodation:"Shared Rooms / Hotel Block", dietary:"", mailed:true},
+  {name:"Yachu Feng", partySize:2, plusOne:"Hongbo Lu", transport:"Driving", accommodation:"", dietary:"", mailed:true},
+  {name:"Adamous Leu", partySize:1, plusOne:"", transport:"", accommodation:"", dietary:"", mailed:true},
+  {name:"Mulian", partySize:1, plusOne:"", transport:"", accommodation:"", dietary:"", mailed:true},
+  {name:"Zhihan Liu", partySize:2, plusOne:"Jing Zhang", transport:"Flying", accommodation:"Hotel Block", dietary:"", mailed:true},
+  {name:"Yuran Liu", partySize:1, plusOne:"", transport:"Driving", accommodation:"", dietary:"No restrictions", mailed:true},
+  {name:"Ran Kuang", partySize:2, plusOne:"Han Song", transport:"Driving", accommodation:"", dietary:"", mailed:true},
+  {name:"Yi", partySize:2, plusOne:"Eric Wang", transport:"", accommodation:"", dietary:"", mailed:true},
+  {name:"Siyuan Ma", partySize:2, plusOne:"Andi Zhong", transport:"", accommodation:"", dietary:"", mailed:true},
+  {name:"Jinjia Huang", partySize:2, plusOne:"Yenan Lin", transport:"", accommodation:"", dietary:"", mailed:true},
+  {name:"Quinny Chen", partySize:1, plusOne:"", transport:"Driving", accommodation:"", dietary:"", mailed:true},
+  {name:"Amanda", partySize:2, plusOne:"Jason", transport:"", accommodation:"", dietary:"", mailed:true},
+  {name:"Edward Liu", partySize:3, plusOne:"Rebecca and Flower", transport:"", accommodation:"", dietary:"", mailed:false},
+  {name:"Stefan", partySize:2, plusOne:"Michelle", transport:"", accommodation:"", dietary:"", mailed:false},
+];
+let guests = [];
+
+function renderGuests() {
+  const p = document.getElementById("panel-guests");
+  const totalPeople = guests.reduce((s,g) => s + (Number(g.partySize)||0), 0);
+  const yesPeople = guests.filter(g=>g.rsvp==="yes").reduce((s,g) => s + (Number(g.partySize)||0), 0);
+  const unmailed = guests.filter(g=>!g.mailed).length;
+  let html = `<div class="stat-row">
+    <div class="stat"><div class="num">${guests.length}</div><div class="lbl">Households</div></div>
+    <div class="stat"><div class="num">${totalPeople}</div><div class="lbl">Total guests</div></div>
+    <div class="stat"><div class="num">${yesPeople}</div><div class="lbl">Confirmed yes</div></div>
+    <div class="stat"><div class="num">${unmailed}</div><div class="lbl">Invite not mailed</div></div>
+  </div>
+  <div class="add-form">
+    <input type="text" id="g-name" placeholder="Household or guest name" style="flex:2; min-width:140px;" />
+    <input type="number" id="g-party" placeholder="Party size" min="1" style="flex:0 0 90px;" />
+    <button class="primary" id="g-add">Add household</button>
+  </div>
+  <div class="card" id="g-list"></div>`;
+  p.innerHTML = html;
+
+  const list = document.getElementById("g-list");
+  if (guests.length === 0) {
+    list.innerHTML = '<p class="muted">No households yet. Add one above.</p>';
+  } else {
+    list.innerHTML = guests.map(g => `
+      <div class="item-row">
+        <span style="flex:2; min-width:120px; font-weight:600;">${g.name}</span>
+        <span class="muted" style="flex:0 0 70px;">Party of ${g.partySize}</span>
+        <select data-id="${g.id}" data-field="rsvp" style="flex:0 0 100px;">
+          <option value="pending" ${g.rsvp==="pending"?"selected":""}>Pending</option>
+          <option value="yes" ${g.rsvp==="yes"?"selected":""}>Yes</option>
+          <option value="no" ${g.rsvp==="no"?"selected":""}>No</option>
+        </select>
+        <label class="muted" style="display:flex; align-items:center; gap:4px;">
+          <input type="checkbox" data-id="${g.id}" data-field="mailed" ${g.mailed?"checked":""} /> Mailed
+        </label>
+        <button class="icon-btn" data-id="${g.id}" data-action="remove">Remove</button>
+        ${g.plusOne ? `<div class="muted" style="width:100%;">With: ${g.plusOne}</div>` : ""}
+        <input type="text" data-id="${g.id}" data-field="dietary" placeholder="Dietary notes" value="${g.dietary||""}" style="flex:1; min-width:150px;" />
+        <input type="text" data-id="${g.id}" data-field="transport" placeholder="Transport" value="${g.transport||""}" style="flex:0 0 100px;" />
+      </div>`).join("");
+  }
+
+  document.getElementById("g-add").addEventListener("click", async () => {
+    const name = document.getElementById("g-name").value.trim();
+    const party = Number(document.getElementById("g-party").value) || 1;
+    if (!name) return;
+    guests.push({id:uid(), name, partySize:party, plusOne:"", rsvp:"pending", dietary:"", transport:"", accommodation:"", mailed:false});
+    await saveKey("wedding-guests", guests);
+    renderGuests();
+  });
+
+  list.querySelectorAll("[data-field]").forEach(el => {
+    el.addEventListener("change", async (e) => {
+      const g = guests.find(x => x.id === e.target.dataset.id);
+      if (!g) return;
+      g[e.target.dataset.field] = e.target.dataset.field === "mailed" ? e.target.checked : e.target.value;
+      await saveKey("wedding-guests", guests);
+      renderGuests();
+    });
+  });
+  list.querySelectorAll("[data-action=remove]").forEach(btn => {
+    btn.addEventListener("click", async (e) => {
+      guests = guests.filter(g => g.id !== e.target.dataset.id);
+      await saveKey("wedding-guests", guests);
+      renderGuests();
+    });
+  });
+}
+
+let activities = [];
+function renderActivities() {
+  const p = document.getElementById("panel-activities");
+  let html = `<div class="add-form">
+    <input type="text" id="a-name" placeholder="Activity" style="flex:2; min-width:130px;" />
+    <input type="text" id="a-owner" placeholder="Owner" style="flex:1; min-width:100px;" />
+    <input type="date" id="a-due" style="flex:0 0 140px;" />
+    <button class="primary" id="a-add">Add activity</button>
+  </div>
+  <div class="card" id="a-list"></div>`;
+  p.innerHTML = html;
+  const list = document.getElementById("a-list");
+  if (activities.length === 0) {
+    list.innerHTML = '<p class="muted">No activities yet. Add one above.</p>';
+  } else {
+    list.innerHTML = activities.map(a => `
+      <div class="item-row">
+        <span style="flex:2; min-width:120px; font-weight:600;">${a.name}</span>
+        <span class="muted" style="flex:1; min-width:90px;">${a.owner || "Unassigned"}</span>
+        <span class="muted" style="flex:0 0 100px;">${a.due || "No date"}</span>
+        <select data-id="${a.id}" data-field="status" style="flex:0 0 130px;">
+          <option value="not-started" ${a.status==="not-started"?"selected":""}>Not started</option>
+          <option value="in-progress" ${a.status==="in-progress"?"selected":""}>In progress</option>
+          <option value="done" ${a.status==="done"?"selected":""}>Done</option>
+        </select>
+        <button class="icon-btn" data-id="${a.id}" data-action="remove">Remove</button>
+      </div>`).join("");
+  }
+  document.getElementById("a-add").addEventListener("click", async () => {
+    const name = document.getElementById("a-name").value.trim();
+    const owner = document.getElementById("a-owner").value.trim();
+    const due = document.getElementById("a-due").value;
+    if (!name) return;
+    activities.push({id:uid(), name, owner, due, status:"not-started"});
+    await saveKey("wedding-activities", activities);
+    renderActivities();
+  });
+  list.querySelectorAll("[data-field]").forEach(el => {
+    el.addEventListener("change", async (e) => {
+      const a = activities.find(x => x.id === e.target.dataset.id);
+      if (!a) return;
+      a[e.target.dataset.field] = e.target.value;
+      await saveKey("wedding-activities", activities);
+      renderActivities();
+    });
+  });
+  list.querySelectorAll("[data-action=remove]").forEach(btn => {
+    btn.addEventListener("click", async (e) => {
+      activities = activities.filter(a => a.id !== e.target.dataset.id);
+      await saveKey("wedding-activities", activities);
+      renderActivities();
+    });
+  });
+}
+
+let timeline = [];
+function renderTimeline() {
+  const p = document.getElementById("panel-timeline");
+  let html = `<div class="add-form">
+    <input type="text" id="t-time" placeholder="Time (e.g. 2:00 PM)" style="flex:0 0 140px;" />
+    <input type="text" id="t-event" placeholder="Event" style="flex:2; min-width:150px;" />
+    <button class="primary" id="t-add">Add moment</button>
+  </div>
+  <div class="card" id="t-list"></div>`;
+  p.innerHTML = html;
+  const list = document.getElementById("t-list");
+  const sorted = [...timeline].sort((a,b) => (a.order||0) - (b.order||0));
+  if (sorted.length === 0) {
+    list.innerHTML = '<p class="muted">No timeline entries yet. Add one above.</p>';
+  } else {
+    list.innerHTML = sorted.map(t => `
+      <div class="item-row">
+        <span style="flex:0 0 110px; font-weight:600; color:var(--primary);">${t.time}</span>
+        <span style="flex:2; min-width:150px;">${t.event}</span>
+        <button class="icon-btn" data-id="${t.id}" data-action="remove">Remove</button>
+      </div>`).join("");
+  }
+  document.getElementById("t-add").addEventListener("click", async () => {
+    const time = document.getElementById("t-time").value.trim();
+    const event = document.getElementById("t-event").value.trim();
+    if (!event) return;
+    timeline.push({id:uid(), time, event, order: timeline.length});
+    await saveKey("wedding-timeline", timeline);
+    renderTimeline();
+  });
+  list.querySelectorAll("[data-action=remove]").forEach(btn => {
+    btn.addEventListener("click", async (e) => {
+      timeline = timeline.filter(t => t.id !== e.target.dataset.id);
+      await saveKey("wedding-timeline", timeline);
+      renderTimeline();
+    });
+  });
+}
+
+let dressItems = [];
+const DRESS_STATUSES = ["Not started","Ordered","Fitting scheduled","Alterations in progress","Ready for pickup","Picked up"];
+function renderDress() {
+  const p = document.getElementById("panel-dress");
+  let html = `<div class="add-form">
+    <input type="text" id="d-person" placeholder="Person (e.g. Bride)" style="flex:1; min-width:100px;" />
+    <input type="text" id="d-item" placeholder="Item (e.g. Dress, veil)" style="flex:1; min-width:120px;" />
+    <button class="primary" id="d-add">Add item</button>
+  </div>
+  <div class="card" id="d-list"></div>`;
+  p.innerHTML = html;
+  const list = document.getElementById("d-list");
+  if (dressItems.length === 0) {
+    list.innerHTML = '<p class="muted">No attire items yet. Add one above.</p>';
+  } else {
+    list.innerHTML = dressItems.map(d => `
+      <div class="item-row">
+        <span style="flex:1; min-width:90px; font-weight:600;">${d.person}</span>
+        <span style="flex:1; min-width:100px;">${d.item}</span>
+        <select data-id="${d.id}" data-field="status" style="flex:0 0 170px;">
+          ${DRESS_STATUSES.map(s => `<option value="${s}" ${d.status===s?"selected":""}>${s}</option>`).join("")}
+        </select>
+        <input type="date" data-id="${d.id}" data-field="date" value="${d.date||""}" style="flex:0 0 140px;" />
+        <button class="icon-btn" data-id="${d.id}" data-action="remove">Remove</button>
+        <input type="text" data-id="${d.id}" data-field="notes" placeholder="Notes" value="${d.notes||""}" style="flex:1; min-width:150px; width:100%;" />
+      </div>`).join("");
+  }
+  document.getElementById("d-add").addEventListener("click", async () => {
+    const person = document.getElementById("d-person").value.trim();
+    const item = document.getElementById("d-item").value.trim();
+    if (!person || !item) return;
+    dressItems.push({id:uid(), person, item, status:"Not started", date:"", notes:""});
+    await saveKey("wedding-dress", dressItems);
+    renderDress();
+  });
+  list.querySelectorAll("[data-field]").forEach(el => {
+    el.addEventListener("change", async (e) => {
+      const d = dressItems.find(x => x.id === e.target.dataset.id);
+      if (!d) return;
+      d[e.target.dataset.field] = e.target.value;
+      await saveKey("wedding-dress", dressItems);
+      renderDress();
+    });
+  });
+  list.querySelectorAll("[data-action=remove]").forEach(btn => {
+    btn.addEventListener("click", async (e) => {
+      dressItems = dressItems.filter(d => d.id !== e.target.dataset.id);
+      await saveKey("wedding-dress", dressItems);
+      renderDress();
+    });
+  });
+}
+
+let budget = { total: 0, expenses: [] };
+function budgetSpent() {
+  return budget.expenses.reduce((s, e) => s + (Number(e.amount) || 0), 0);
+}
+function fmtMoney(n) {
+  return "$" + Number(n || 0).toLocaleString(undefined, {maximumFractionDigits: 0});
+}
+function renderBudget() {
+  const p = document.getElementById("panel-budget");
+  const spent = budgetSpent();
+  const remaining = (Number(budget.total) || 0) - spent;
+  const pct = budget.total ? Math.min(100, Math.round(spent / budget.total * 100)) : 0;
+  let html = `
+  <div class="card">
+    <div class="row" style="justify-content:space-between; margin-bottom:10px;">
+      <span class="section-title" style="margin:0;">Total budget</span>
+      <input type="number" id="b-total" value="${budget.total || ""}" placeholder="0" style="width:130px; text-align:right;" />
+    </div>
+    <div class="progress-bar" style="margin-bottom:8px;"><div class="progress-fill" style="width:${pct}%; ${remaining < 0 ? "background:#D9455F;" : ""}"></div></div>
+    <div class="row" style="justify-content:space-between;">
+      <span class="muted">${fmtMoney(spent)} spent</span>
+      <span class="muted">${remaining < 0 ? fmtMoney(Math.abs(remaining)) + " over" : fmtMoney(remaining) + " remaining"}</span>
+    </div>
+  </div>
+  <div class="add-form">
+    <input type="text" id="e-name" placeholder="Expense (e.g. Venue deposit)" style="flex:2; min-width:140px;" />
+    <input type="text" id="e-category" placeholder="Category" style="flex:1; min-width:100px;" />
+    <input type="number" id="e-amount" placeholder="Amount" style="flex:0 0 100px;" />
+    <button class="primary" id="e-add">Add expense</button>
+  </div>
+  <div class="card" id="e-list"></div>`;
+  p.innerHTML = html;
+
+  const list = document.getElementById("e-list");
+  if (budget.expenses.length === 0) {
+    list.innerHTML = '<p class="muted">No expenses logged yet. Add one above.</p>';
+  } else {
+    list.innerHTML = budget.expenses.map(e => `
+      <div class="item-row">
+        <span style="flex:2; min-width:120px; font-weight:600;">${e.name}</span>
+        <span class="muted" style="flex:1; min-width:90px;">${e.category || "Uncategorized"}</span>
+        <span style="flex:0 0 90px; font-weight:600;">${fmtMoney(e.amount)}</span>
+        <button class="icon-btn" data-id="${e.id}" data-action="remove">Remove</button>
+      </div>`).join("");
+  }
+
+  document.getElementById("b-total").addEventListener("change", async (e) => {
+    budget.total = Number(e.target.value) || 0;
+    await saveKey("wedding-budget", budget);
+    renderBudget();
+  });
+  document.getElementById("e-add").addEventListener("click", async () => {
+    const name = document.getElementById("e-name").value.trim();
+    const category = document.getElementById("e-category").value.trim();
+    const amount = Number(document.getElementById("e-amount").value) || 0;
+    if (!name) return;
+    budget.expenses.push({id: uid(), name, category, amount});
+    await saveKey("wedding-budget", budget);
+    renderBudget();
+  });
+  list.querySelectorAll("[data-action=remove]").forEach(btn => {
+    btn.addEventListener("click", async (e) => {
+      budget.expenses = budget.expenses.filter(x => x.id !== e.target.dataset.id);
+      await saveKey("wedding-budget", budget);
+      renderBudget();
+    });
+  });
+}
+
+let shopList = [];
+const SHOP_COLS = [
+  {key:"category", label:"Category", type:"text", width:130},
+  {key:"item", label:"Item", type:"text", width:150},
+  {key:"qtyNeeded", label:"Qty Needed", type:"number", width:100},
+  {key:"qtyBought", label:"Qty Bought", type:"number", width:100},
+  {key:"notes", label:"Notes / Status", type:"text", width:140},
+  {key:"logo", label:"Logo", type:"text", width:90},
+  {key:"size", label:"Size", type:"text", width:110},
+  {key:"number", label:"Number", type:"text", width:80},
+  {key:"type", label:"Type", type:"text", width:100},
+];
+function renderShopList() {
+  const p = document.getElementById("panel-shoplist");
+  let html = `
+  <div class="row" style="margin-bottom:12px;">
+    <button class="primary" id="sl-add">+ Add item</button>
+  </div>
+  <div class="table-wrap"><table class="data-table">
+    <thead><tr>
+      ${SHOP_COLS.map(c => `<th>${c.label}</th>`).join("")}
+      <th>Remaining</th>
+      <th></th>
+    </tr></thead>
+    <tbody>`;
+  if (shopList.length === 0) {
+    html += `<tr><td colspan="${SHOP_COLS.length + 2}" class="muted" style="padding:16px;">No items yet. Click "+ Add item" to start your shop list.</td></tr>`;
+  } else {
+    shopList.forEach(row => {
+      const remaining = (Number(row.qtyNeeded) || 0) - (Number(row.qtyBought) || 0);
+      html += `<tr>`;
+      SHOP_COLS.forEach(c => {
+        html += `<td><input type="${c.type}" data-id="${row.id}" data-field="${c.key}" value="${row[c.key] || ""}" style="min-width:${c.width}px;" /></td>`;
+      });
+      html += `<td class="muted" style="white-space:nowrap;">${remaining}</td>`;
+      html += `<td><button class="icon-btn" data-id="${row.id}" data-action="remove">Remove</button></td>`;
+      html += `</tr>`;
+    });
+  }
+  html += `</tbody></table></div>`;
+  p.innerHTML = html;
+
+  document.getElementById("sl-add").addEventListener("click", async () => {
+    const newRow = {id: uid()};
+    SHOP_COLS.forEach(c => newRow[c.key] = "");
+    shopList.push(newRow);
+    await saveKey("wedding-shop-list", shopList);
+    renderShopList();
+  });
+  p.querySelectorAll("[data-field]").forEach(el => {
+    el.addEventListener("change", async (e) => {
+      const row = shopList.find(r => r.id === e.target.dataset.id);
+      if (!row) return;
+      row[e.target.dataset.field] = e.target.value;
+      await saveKey("wedding-shop-list", shopList);
+      renderShopList();
+    });
+  });
+  p.querySelectorAll("[data-action=remove]").forEach(btn => {
+    btn.addEventListener("click", async (e) => {
+      shopList = shopList.filter(r => r.id !== e.target.dataset.id);
+      await saveKey("wedding-shop-list", shopList);
+      renderShopList();
+    });
+  });
+}
+
+function renderDashboard() {
+  const p = document.getElementById("panel-dashboard");
+  const totalPeople = guests.reduce((s,g) => s + (Number(g.partySize)||0), 0);
+  const yesPeople = guests.filter(g=>g.rsvp==="yes").reduce((s,g) => s + (Number(g.partySize)||0), 0);
+  const respondedHouseholds = guests.filter(g => g.rsvp !== "pending").length;
+  const guestPct = guests.length ? Math.round(respondedHouseholds / guests.length * 100) : 0;
+
+  const spent = budgetSpent();
+  const total = Number(budget.total) || 0;
+  const pct = total ? Math.min(100, Math.round(spent / total * 100)) : 0;
+  const remaining = total - spent;
+  const budgetPct = total ? pct : 0;
+
+  let totalDone = 0, totalItems = 0;
+  const upcoming = [];
+  todoData.forEach(s => s.items.forEach(item => {
+    totalItems++;
+    if (todoState[item.id]) totalDone++;
+    else upcoming.push({...item, section: s.label});
+  }));
+  const todoPct = totalItems ? Math.round(totalDone/totalItems*100) : 0;
+
+  const overallPct = Math.round((guestPct + budgetPct + todoPct) / 3);
+
+  let html = `
+  <div class="card">
+    <div class="row" style="justify-content:space-between; margin-bottom:8px;">
+      <p class="section-title" style="margin:0;">Overall wedding readiness</p>
+      <span style="font-weight:700; color:var(--primary); font-size:15px;">${overallPct}%</span>
+    </div>
+    <div class="progress-bar" style="height:10px; margin-bottom:14px;"><div class="progress-fill" style="width:${overallPct}%;"></div></div>
+    <div class="row" style="gap:20px; flex-wrap:wrap;">
+      <div style="flex:1; min-width:130px;">
+        <div class="row" style="justify-content:space-between; margin-bottom:4px;"><span class="muted">Guests responded</span><span class="muted">${guestPct}%</span></div>
+        <div class="progress-bar" style="height:5px;"><div class="progress-fill" style="width:${guestPct}%;"></div></div>
+      </div>
+      <div style="flex:1; min-width:130px;">
+        <div class="row" style="justify-content:space-between; margin-bottom:4px;"><span class="muted">Budget used</span><span class="muted">${total ? budgetPct + "%" : "No budget set"}</span></div>
+        <div class="progress-bar" style="height:5px;"><div class="progress-fill" style="width:${budgetPct}%; ${remaining < 0 ? "background:#D9455F;" : ""}"></div></div>
+      </div>
+      <div style="flex:1; min-width:130px;">
+        <div class="row" style="justify-content:space-between; margin-bottom:4px;"><span class="muted">To-dos done</span><span class="muted">${todoPct}%</span></div>
+        <div class="progress-bar" style="height:5px;"><div class="progress-fill" style="width:${todoPct}%;"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="stat-row">
+    <div class="stat">
+      <div class="num">${totalPeople}</div>
+      <div class="lbl">Total guests (${yesPeople} confirmed)</div>
+    </div>
+    <div class="stat">
+      <div class="num">${fmtMoney(spent)}</div>
+      <div class="lbl">${total ? "of " + fmtMoney(total) + " budget" : "spent so far"}</div>
+    </div>
+    <div class="stat">
+      <div class="num">${totalDone}/${totalItems}</div>
+      <div class="lbl">To-dos done</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="row" style="justify-content:space-between; margin-bottom:8px;">
+      <p class="section-title" style="margin:0;">Budget</p>
+      <button id="goto-budget" style="border:none; background:none; padding:0; color:var(--primary); font-size:13px; font-weight:600; cursor:pointer; font-family:inherit;">View all &rarr;</button>
+    </div>
+    <div class="progress-bar" style="margin-bottom:8px;"><div class="progress-fill" style="width:${pct}%; ${remaining < 0 ? "background:#D9455F;" : ""}"></div></div>
+    <div class="row" style="justify-content:space-between;">
+      <span class="muted">${fmtMoney(spent)} spent</span>
+      <span class="muted">${total ? (remaining < 0 ? fmtMoney(Math.abs(remaining)) + " over budget" : fmtMoney(remaining) + " remaining") : "Set a total budget in the Budget tab"}</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="row" style="justify-content:space-between; margin-bottom:8px;">
+      <p class="section-title" style="margin:0;">To-do quick view</p>
+      <div class="row" style="gap:10px;">
+        <span class="muted">${todoPct}% complete</span>
+        <button id="goto-todo" style="border:none; background:none; padding:0; color:var(--primary); font-size:13px; font-weight:600; cursor:pointer; font-family:inherit;">View all &rarr;</button>
+      </div>
+    </div>
+    <div class="progress-bar" style="margin-bottom:12px;"><div class="progress-fill" style="width:${todoPct}%;"></div></div>
+    ${upcoming.length === 0 ? '<p class="muted">Everything is checked off. Nicely done.</p>' : upcoming.slice(0, 5).map(item => `
+      <div class="item-row">
+        <span style="flex:2; min-width:150px;">${item.text}</span>
+        <span class="muted" style="flex:0 0 100px;">${item.section}</span>
+        <span class="muted" style="flex:0 0 90px;">${item.assignee || "Unassigned"}</span>
+      </div>`).join("")}
+  </div>`;
+  p.innerHTML = html;
+  const gotoLink = document.getElementById("goto-todo");
+  if (gotoLink) {
+    gotoLink.addEventListener("click", (e) => {
+      e.preventDefault();
+      goToTab("todo");
+    });
+  }
+  const gotoBudgetLink = document.getElementById("goto-budget");
+  if (gotoBudgetLink) {
+    gotoBudgetLink.addEventListener("click", (e) => {
+      e.preventDefault();
+      goToTab("budget");
+    });
+  }
+}
+
+(async function init() {
+  const savedItems = await loadKey("wedding-todo-items");
+  const savedState = (await loadKey("wedding-checklist")) || {};
+
+  if (savedItems && savedItems.length) {
+    todoData = savedItems;
+    const migrated = await loadKey("wedding-assignee-reset-done");
+    if (!migrated) {
+      todoData.forEach(s => s.items.forEach(item => { item.assignee = ""; }));
+      await saveKey("wedding-todo-items", todoData);
+      await saveKey("wedding-assignee-reset-done", true);
+    }
+    todoState = savedState;
+  } else {
+    todoData = TODO_DEFAULTS.map(s => ({
+      id: s.id,
+      label: s.label,
+      items: s.items.map((text, i) => ({id: s.id + "-" + i, text}))
+    }));
+    todoState = savedState;
+    await saveKey("wedding-todo-items", todoData);
+  }
+
+  guests = await loadKey("wedding-guests");
+  if (!guests || guests.length === 0) {
+    guests = GUEST_SEED.map(s => ({id: uid(), ...s, rsvp: "yes"}));
+    await saveKey("wedding-guests", guests);
+  }
+  activities = (await loadKey("wedding-activities")) || [];
+  timeline = (await loadKey("wedding-timeline")) || [];
+  dressItems = (await loadKey("wedding-dress")) || [];
+  helperTags = (await loadKey("wedding-helper-tags")) || [];
+  budget = (await loadKey("wedding-budget")) || { total: 0, expenses: [] };
+  shopList = (await loadKey("wedding-shop-list")) || [];
+
+  renderDashboard();
+  renderTodo();
+  renderGuests();
+  renderBudget();
+  renderShopList();
+  renderActivities();
+  renderTimeline();
+  renderDress();
+})();
+</script>
+</body>
+</html>
