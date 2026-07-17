@@ -256,6 +256,17 @@ let todoData = [];
 let todoState = {};
 let helperTags = [];
 
+const WEDDING_DATE = new Date(2026, 8, 19);
+const SECTION_DAY_RANGES = { s1: [70, 56], s2: [42, 28], s3: [21, 14], s4: [6, 0], s5: [1, 1], s6: [0, 0] };
+function sectionDateRange(id) {
+  const r = SECTION_DAY_RANGES[id];
+  if (!r) return "";
+  const fmt = d => d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const start = new Date(WEDDING_DATE); start.setDate(start.getDate() - r[0]);
+  const end = new Date(WEDDING_DATE); end.setDate(end.getDate() - r[1]);
+  return r[0] === r[1] ? fmt(start) : fmt(start) + " – " + fmt(end);
+}
+
 function renderTodo() {
   const p = document.getElementById("panel-todo");
   let totalDone = 0, totalItems = 0;
@@ -278,8 +289,9 @@ function renderTodo() {
   </div>`;
   todoData.forEach(s => {
     const done = s.items.filter(item => todoState[item.id]).length;
+    const range = sectionDateRange(s.id);
     html += `<div class="card"><div class="row" style="justify-content:space-between; margin-bottom:6px;">
-      <p class="section-title">${s.label}</p><span class="muted">${done}/${s.items.length}</span></div>`;
+      <p class="section-title">${s.label}${range ? ` <span class="muted" style="font-weight:500;">· ${range}</span>` : ""}</p><span class="muted">${done}/${s.items.length}</span></div>`;
     s.items.forEach(item => {
       const checked = !!todoState[item.id];
       const assignee = item.assignee || "";
