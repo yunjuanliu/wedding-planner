@@ -426,18 +426,39 @@ const GUEST_SEED = [
   {name:"Stefan", partySize:2, plusOne:"Michelle", transport:"", accommodation:"", dietary:"", mailed:false},
 ];
 let guests = [];
+let guestFilter = "all";
 
 function renderGuests() {
   const p = document.getElementById("panel-guests");
-  const totalPeople = guests.reduce((s,g) => s + (Number(g.partySize)||0), 0);
-  const yesPeople = guests.filter(g=>g.rsvp==="yes").reduce((s,g) => s + (Number(g.partySize)||0), 0);
-  const unmailed = guests.filter(g=>!g.mailed).length;
+  const people = arr => arr.reduce((s,g) => s + (Number(g.partySize)||0), 0);
+  const totalPeople = people(guests);
+  const yesPeople = people(guests.filter(g=>g.rsvp==="yes"));
+  const mailedHouseholds = guests.filter(g=>g.mailed);
+  const unmailedHouseholds = guests.filter(g=>!g.mailed);
+  const flying = guests.filter(g => (g.transport||"").toLowerCase().includes("fly"));
+  const driving = guests.filter(g => (g.transport||"").toLowerCase().includes("driv"));
+  const noTransport = guests.filter(g => !flying.includes(g) && !driving.includes(g));
+  const dietaryGuests = guests.filter(g => (g.dietary||"").trim());
+  const activeStyle = "box-shadow: inset 0 0 0 2px var(--primary);";
   let html = `<div class="stat-row">
     <div class="stat"><div class="num">${guests.length}</div><div class="lbl">Households</div></div>
     <div class="stat"><div class="num">${totalPeople}</div><div class="lbl">Total guests</div></div>
     <div class="stat"><div class="num">${yesPeople}</div><div class="lbl">Confirmed yes</div></div>
-    <div class="stat"><div class="num">${unmailed}</div><div class="lbl">Invite not mailed</div></div>
+    <div class="stat" id="filter-mailed" title="Click to filter" style="cursor:pointer; ${guestFilter==="mailed"?activeStyle:""}"><div class="num">${mailedHouseholds.length}</div><div class="lbl">Invite mailed${guestFilter==="mailed"?" · filtering":""}</div></div>
+    <div class="stat" id="filter-unmailed" title="Click to filter" style="cursor:pointer; ${guestFilter==="unmailed"?activeStyle:""}"><div class="num">${unmailedHouseholds.length}</div><div class="lbl">Invite not mailed${guestFilter==="unmailed"?" · filtering":""}</div></div>
   </div>
+  <div class="card">
+    <p class="section-title" style="margin:0 0 10px;">Travel</p>
+    <div class="stat-row" style="margin-bottom:0;">
+      <div class="stat"><div class="num">${people(flying)}</div><div class="lbl">Flying in (${flying.length} households)</div></div>
+      <div class="stat"><div class="num">${people(driving)}</div><div class="lbl">Driving (${driving.length} households)</div></div>
+      <div class="stat"><div class="num">${people(noTransport)}</div><div class="lbl">Not specified (${noTransport.length} households)</div></div>
+    </div>
+  </div>
+  ${dietaryGuests.length ? `<div class="card">
+    <p class="section-title" style="margin:0 0 8px;">Dietary notes</p>
+    ${dietaryGuests.map(g => `<div style="font-size:13.5px; padding:3px 0;"><strong>${g.name}</strong> <span class="muted">— ${g.dietary}</span></div>`).join("")}
+  </div>` : ""}
   <div class="add-form">
     <input type="text" id="g-name" placeholder="Household or guest name" style="flex:2; min-width:140px;" />
     <input type="number" id="g-party" placeholder="Party size" min="1" style="flex:0 0 90px;" />
@@ -447,10 +468,13 @@ function renderGuests() {
   p.innerHTML = html;
 
   const list = document.getElementById("g-list");
+  const shown = guestFilter === "mailed" ? mailedHouseholds : guestFilter === "unmailed" ? unmailedHouseholds : guests;
   if (guests.length === 0) {
     list.innerHTML = '<p class="muted">No households yet. Add one above.</p>';
+  } else if (shown.length === 0) {
+    list.innerHTML = '<p class="muted">No households match this filter.</p>';
   } else {
-    list.innerHTML = guests.map(g => `
+    list.innerHTML = shown.map(g => `
       <div class="item-row">
         <span style="flex:2; min-width:120px; font-weight:600;">${g.name}</span>
         <span class="muted" style="flex:0 0 70px;">Party of ${g.partySize}</span>
@@ -464,7 +488,7 @@ function renderGuests() {
         </label>
         <button class="icon-btn" data-id="${g.id}" data-action="remove">Remove</button>
         ${g.plusOne ? `<div class="muted" style="width:100%;">With: ${g.plusOne}</div>` : ""}
-        <input type="text" data-id="${g.id}" data-field="dietary" placeholder="Dietary notes" value="${g.dietary||""}" style="flex:1; min-width:150px;" />
+        ${(g.dietary||"").trim() ? `<input type="text" data-id="${g.id}" data-field="dietary" placeholder="Dietary notes" value="${g.dietary}" style="flex:1; min-width:150px;" />` : `<button class="icon-btn" data-id="${g.id}" data-action="add-diet">+ Diet</button>`}
         <input type="text" data-id="${g.id}" data-field="transport" placeholder="Transport" value="${g.transport||""}" style="flex:0 0 100px;" />
       </div>`).join("");
   }
@@ -493,6 +517,25 @@ function renderGuests() {
       await saveKey("wedding-guests", guests);
       renderGuests();
     });
+  });
+  list.querySelectorAll("[data-action=add-diet]").forEach(btn => {
+    btn.addEventListener("click", async (e) => {
+      const g = guests.find(x => x.id === e.target.dataset.id);
+      if (!g) return;
+      const note = (window.prompt("Dietary note for " + g.name) || "").trim();
+      if (!note) return;
+      g.dietary = note;
+      await saveKey("wedding-guests", guests);
+      renderGuests();
+    });
+  });
+  document.getElementById("filter-mailed").addEventListener("click", () => {
+    guestFilter = guestFilter === "mailed" ? "all" : "mailed";
+    renderGuests();
+  });
+  document.getElementById("filter-unmailed").addEventListener("click", () => {
+    guestFilter = guestFilter === "unmailed" ? "all" : "unmailed";
+    renderGuests();
   });
 }
 
