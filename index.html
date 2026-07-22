@@ -203,6 +203,8 @@ document.querySelectorAll(".tab").forEach(t => {
 
 function uid() { return Math.random().toString(36).slice(2, 9); }
 
+const TRASH_ICON = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>';
+
 const SUPABASE_URL = "https://nxqmcqdmiwewuvmsquzo.supabase.co";
 const SUPABASE_KEY = "sb_publishable_wD2nS9lqTHuLTgjA6FBBKw_-udl1xAt";
 const SB_HEADERS = {
@@ -266,6 +268,14 @@ function sectionDateRange(id) {
   const end = new Date(WEDDING_DATE); end.setDate(end.getDate() - r[1]);
   return r[0] === r[1] ? fmt(start) : fmt(start) + " – " + fmt(end);
 }
+function isCurrentSection(id) {
+  const r = SECTION_DAY_RANGES[id];
+  if (!r) return false;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const start = new Date(WEDDING_DATE); start.setDate(start.getDate() - r[0]);
+  const end = new Date(WEDDING_DATE); end.setDate(end.getDate() - r[1]);
+  return today >= start && today <= end;
+}
 
 function renderTodo() {
   const p = document.getElementById("panel-todo");
@@ -290,8 +300,11 @@ function renderTodo() {
   todoData.forEach(s => {
     const done = s.items.filter(item => todoState[item.id]).length;
     const range = sectionDateRange(s.id);
-    html += `<div class="card"><div class="row" style="justify-content:space-between; margin-bottom:6px;">
-      <p class="section-title">${s.label}${range ? ` <span class="muted" style="font-weight:500;">· ${range}</span>` : ""}</p><span class="muted">${done}/${s.items.length}</span></div>`;
+    const current = isCurrentSection(s.id);
+    const cardStyle = current ? ' style="border-color:var(--primary); box-shadow:0 0 0 1px var(--primary); background:var(--primary-light);"' : "";
+    const nowBadge = current ? ' <span style="background:var(--primary); color:var(--white); font-size:11px; font-weight:600; border-radius:10px; padding:2px 8px; vertical-align:middle;">NOW</span>' : "";
+    html += `<div class="card"${cardStyle}><div class="row" style="justify-content:space-between; margin-bottom:6px;">
+      <p class="section-title">${s.label}${range ? ` <span class="muted" style="font-weight:500;">· ${range}</span>` : ""}${nowBadge}</p><span class="muted">${done}/${s.items.length}</span></div>`;
     s.items.forEach(item => {
       const checked = !!todoState[item.id];
       const assignee = item.assignee || "";
@@ -304,7 +317,7 @@ function renderTodo() {
           <span class="${checked ? "strike" : ""}">${item.text}</span>
         </label>
         <select data-assign-section="${s.id}" data-assign-item="${item.id}" style="flex:0 0 150px;">${options}</select>
-        <button class="icon-btn" data-remove-section="${s.id}" data-remove-item="${item.id}">Remove</button>
+        <button class="icon-btn" data-remove-section="${s.id}" data-remove-item="${item.id}" aria-label="Remove" title="Remove">${TRASH_ICON}</button>
       </div>`;
     });
     html += `<div class="add-form" style="margin:10px 0 0;">
@@ -486,7 +499,7 @@ function renderGuests() {
         <label class="muted" style="display:flex; align-items:center; gap:4px;">
           <input type="checkbox" data-id="${g.id}" data-field="mailed" ${g.mailed?"checked":""} /> Mailed
         </label>
-        <button class="icon-btn" data-id="${g.id}" data-action="remove">Remove</button>
+        <button class="icon-btn" data-id="${g.id}" data-action="remove" aria-label="Remove" title="Remove">${TRASH_ICON}</button>
         ${g.plusOne ? `<div class="muted" style="width:100%;">With: ${g.plusOne}</div>` : ""}
         ${(g.dietary||"").trim() ? `<input type="text" data-id="${g.id}" data-field="dietary" placeholder="Dietary notes" value="${g.dietary}" style="flex:1; min-width:150px;" />` : `<button class="icon-btn" data-id="${g.id}" data-action="add-diet">+ Diet</button>`}
         <input type="text" data-id="${g.id}" data-field="transport" placeholder="Transport" value="${g.transport||""}" style="flex:0 0 100px;" />
@@ -564,7 +577,7 @@ function renderActivities() {
           <option value="in-progress" ${a.status==="in-progress"?"selected":""}>In progress</option>
           <option value="done" ${a.status==="done"?"selected":""}>Done</option>
         </select>
-        <button class="icon-btn" data-id="${a.id}" data-action="remove">Remove</button>
+        <button class="icon-btn" data-id="${a.id}" data-action="remove" aria-label="Remove" title="Remove">${TRASH_ICON}</button>
       </div>`).join("");
   }
   document.getElementById("a-add").addEventListener("click", async () => {
@@ -594,6 +607,40 @@ function renderActivities() {
   });
 }
 
+const TIMELINE_SEED = [
+  {section:"Morning preparation", time:"7:00 am", event:"Wake up & light breakfast", note:"Bride & wedding party fuels up before the long day"},
+  {section:"Morning preparation", time:"7:30 am", event:"Ceremony rehearsal", note:"Full wedding party at ceremony venue — processional order, positions, cues, vow exchange run-through, recessional", dur:"~45 min"},
+  {section:"Morning preparation", time:"8:15 am", event:"Return to getting-ready suite", note:"Travel back; bridal party hair & makeup begins; groom & groomsmen start getting ready"},
+  {section:"Morning preparation", time:"9:00 am", event:"Tea ceremony", note:"Traditional tea serving with family elders — a moment of gratitude before celebrations begin", dur:"~20 min"},
+  {section:"Morning preparation", time:"9:30 am", event:"Bride's makeup begins", note:"3-hour makeup session — foundation, eyes, lips, setting", dur:"9:30 am → 12:30 pm"},
+  {section:"Morning preparation", time:"11:30 am", event:"Bridal party lunch break", note:"Light lunch delivered to getting-ready suite — avoid anything heavy or staining"},
+  {section:"Morning preparation", time:"12:00 pm", event:"Groom fully ready", note:"Groom & groomsmen portraits with photographer"},
+  {section:"Morning preparation", time:"12:30 pm", event:"Makeup complete — into the gown", note:"Dress assist with bridesmaids; veil, accessories, and shoes"},
+  {section:"Morning preparation", time:"1:00 pm", event:"Bride fully ready — detail photos", note:"Bouquet, rings, shoes, dress details; getting-ready shots with bridal party"},
+  {section:"Morning preparation", time:"1:45 pm", event:"Holding room — final touch-ups", note:"Calm moment before the first look; officiant & wedding party in position"},
+  {section:"Pre-ceremony", time:"2:00 pm", event:"First look", note:"Bride & groom see each other for the first time — private reveal before guests arrive", dur:"~15 min"},
+  {section:"Pre-ceremony", time:"2:15 pm", event:"Couple portraits", note:"Golden light window — romantic couple shots at portrait locations", dur:"~30 min"},
+  {section:"Pre-ceremony", time:"2:45 pm", event:"Bridal party portraits", note:"Bridesmaids, groomsmen, full bridal party lineup shots", dur:"~15 min"},
+  {section:"Pre-ceremony", time:"3:00 pm", event:"Guest check-in begins", note:"Welcome table open; escort cards, programs, welcome bags distributed"},
+  {section:"Pre-ceremony", time:"3:10 pm", event:"Fun activities open", note:"Design your own bag, DIY scented crystal stones, and more"},
+  {section:"Pre-ceremony", time:"3:45 pm", event:"Couple to holding room", note:"Final touch-ups, calm moment; officiant & wedding party in position"},
+  {section:"Ceremony", time:"4:00 pm", event:"Ceremony begins", note:"Processional, vows, ring exchange, pronouncement & kiss", dur:"~25–30 min"},
+  {section:"Ceremony", time:"4:30 pm", event:"Group photos", note:"Family formals first (immediate family, grandparents, extended), then full guest group shot", dur:"~25 min"},
+  {section:"Cocktail hour", time:"5:00 pm", event:"Cocktail hour begins", note:"Guests move to cocktail space; passed appetizers & drinks; lounge music"},
+  {section:"Cocktail hour", time:"5:30 pm", event:"Couple joins cocktail hour briefly", note:"Mingle with guests, grab a bite; candid photos"},
+  {section:"Cocktail hour", time:"5:45 pm", event:"Guests invited to take their seats", note:"MC or venue staff directs guests into the reception room"},
+  {section:"Reception", time:"6:00 pm", event:"Grand entrance", note:"Bridal party introduced one by one; couple enters last to hype music"},
+  {section:"Reception", time:"6:10 pm", event:"Dinner service begins", note:"First course served; ambient background music during dining"},
+  {section:"Reception", time:"7:00 pm", event:"Welcome speech & blessing", note:"Host or family elder opens with a blessing; couple's welcome toast", dur:"~15 min"},
+  {section:"Reception", time:"7:20 pm", event:"Toasts from family & friends", note:"Best man, maid of honor, and any additional speakers (~2–3 total)"},
+  {section:"Evening highlights", time:"7:30 pm", event:"First dance", note:"Couple's first dance; parent dances to follow", dur:"~10 min"},
+  {section:"Evening highlights", time:"7:45 pm", event:"Dance floor opens", note:"DJ or band kicks off; dessert stations may open early for late arrivals"},
+  {section:"Evening highlights", time:"8:30 pm", event:"Cake cutting & dessert", note:"Couple cuts the cake together; dessert station fully opens for all guests"},
+  {section:"Evening highlights", time:"9:00 pm", event:"Party time", note:"Full dance floor — glow sticks, games, high energy. Let the night unfold!"},
+  {section:"Evening highlights", time:"10:30 pm", event:"Last song & farewell", note:"Final dance announced; guests line up for send-off"},
+  {section:"Evening highlights", time:"11:00 pm", event:"Reception ends — send-off", note:"Couple's grand exit (sparklers, ribbon wands, or confetti)"},
+];
+
 let timeline = [];
 function renderTimeline() {
   const p = document.getElementById("panel-timeline");
@@ -609,12 +656,24 @@ function renderTimeline() {
   if (sorted.length === 0) {
     list.innerHTML = '<p class="muted">No timeline entries yet. Add one above.</p>';
   } else {
-    list.innerHTML = sorted.map(t => `
-      <div class="item-row">
-        <span style="flex:0 0 110px; font-weight:600; color:var(--primary);">${t.time}</span>
-        <span style="flex:2; min-width:150px;">${t.event}</span>
-        <button class="icon-btn" data-id="${t.id}" data-action="remove">Remove</button>
-      </div>`).join("");
+    let lastSection = null;
+    list.innerHTML = sorted.map(t => {
+      let header = "";
+      if (t.section && t.section !== lastSection) {
+        lastSection = t.section;
+        header = `<p class="section-title" style="margin:16px 0 8px; color:var(--ink);">${t.section}</p>`;
+      }
+      return `${header}
+      <div class="item-row" style="align-items:flex-start;">
+        <span style="flex:0 0 110px; font-weight:600; color:var(--primary);">${t.time || ""}</span>
+        <div style="flex:2; min-width:150px;">
+          <div style="font-weight:600;">${t.event}</div>
+          ${t.note ? `<div class="muted" style="font-size:13px; margin-top:2px;">${t.note}</div>` : ""}
+          ${t.dur ? `<div class="muted" style="font-size:12px; margin-top:2px;">⏱ ${t.dur}</div>` : ""}
+        </div>
+        <button class="icon-btn" data-id="${t.id}" data-action="remove" aria-label="Remove" title="Remove">${TRASH_ICON}</button>
+      </div>`;
+    }).join("");
   }
   document.getElementById("t-add").addEventListener("click", async () => {
     const time = document.getElementById("t-time").value.trim();
@@ -656,7 +715,7 @@ function renderDress() {
           ${DRESS_STATUSES.map(s => `<option value="${s}" ${d.status===s?"selected":""}>${s}</option>`).join("")}
         </select>
         <input type="date" data-id="${d.id}" data-field="date" value="${d.date||""}" style="flex:0 0 140px;" />
-        <button class="icon-btn" data-id="${d.id}" data-action="remove">Remove</button>
+        <button class="icon-btn" data-id="${d.id}" data-action="remove" aria-label="Remove" title="Remove">${TRASH_ICON}</button>
         <input type="text" data-id="${d.id}" data-field="notes" placeholder="Notes" value="${d.notes||""}" style="flex:1; min-width:150px; width:100%;" />
       </div>`).join("");
   }
@@ -728,7 +787,7 @@ function renderBudget() {
         <span style="flex:2; min-width:120px; font-weight:600;">${e.name}</span>
         <span class="muted" style="flex:1; min-width:90px;">${e.category || "Uncategorized"}</span>
         <span style="flex:0 0 90px; font-weight:600;">${fmtMoney(e.amount)}</span>
-        <button class="icon-btn" data-id="${e.id}" data-action="remove">Remove</button>
+        <button class="icon-btn" data-id="${e.id}" data-action="remove" aria-label="Remove" title="Remove">${TRASH_ICON}</button>
       </div>`).join("");
   }
 
@@ -790,7 +849,7 @@ function renderShopList() {
         html += `<td><input type="${c.type}" data-id="${row.id}" data-field="${c.key}" value="${row[c.key] || ""}" style="min-width:${c.width}px;" /></td>`;
       });
       html += `<td class="muted" style="white-space:nowrap;">${remaining}</td>`;
-      html += `<td><button class="icon-btn" data-id="${row.id}" data-action="remove">Remove</button></td>`;
+      html += `<td><button class="icon-btn" data-id="${row.id}" data-action="remove" aria-label="Remove" title="Remove">${TRASH_ICON}</button></td>`;
       html += `</tr>`;
     });
   }
@@ -959,6 +1018,10 @@ function renderDashboard() {
   }
   activities = (await loadKey("wedding-activities")) || [];
   timeline = (await loadKey("wedding-timeline")) || [];
+  if (!timeline || timeline.length === 0) {
+    timeline = TIMELINE_SEED.map((t, i) => ({id: uid(), order: i, ...t}));
+    await saveKey("wedding-timeline", timeline);
+  }
   dressItems = (await loadKey("wedding-dress")) || [];
   helperTags = (await loadKey("wedding-helper-tags")) || [];
   budget = (await loadKey("wedding-budget")) || { total: 0, expenses: [] };
