@@ -1906,12 +1906,12 @@ function renderBudget() {
     </div>
   </div>
   <div class="table-wrap">
-    <table class="data-table" style="min-width:${vendorExpanded ? "1180px" : "520px"};">
+    <table class="data-table" style="min-width:${vendorExpanded ? "1180px" : "420px"};">
       <thead><tr>
         ${vendorExpanded
           ? `<th>Category</th><th>Vendor</th><th>Contact</th><th>Phone / Email</th>
              <th>Owner</th><th>Contract</th><th>Paid</th><th style="text-align:right;">Cost</th><th>Next steps</th><th></th>`
-          : `<th>Category</th><th>Vendor</th><th>Owner</th><th style="text-align:right; width:130px;">Cost</th>`}
+          : `<th>Category</th><th style="text-align:right; width:130px;">Cost</th><th style="width:44px;"></th>`}
       </tr></thead>
       <tbody id="v-body"></tbody>
       <tfoot><tr>
@@ -1919,8 +1919,9 @@ function renderBudget() {
           ? `<td colspan="7" style="text-align:right; font-weight:600;">Vendors total</td>
              <td style="text-align:right; font-weight:700; color:var(--primary);">${fmtMoney(vendorTotal)}</td>
              <td colspan="2"></td>`
-          : `<td colspan="3" style="text-align:right; font-weight:600;">Vendors total</td>
-             <td style="text-align:right; font-weight:700; color:var(--primary);">${fmtMoney(vendorTotal)}</td>`}
+          : `<td style="text-align:right; font-weight:600;">Vendors total</td>
+             <td style="text-align:right; font-weight:700; color:var(--primary);">${fmtMoney(vendorTotal)}</td>
+             <td></td>`}
       </tr></tfoot>
     </table>
   </div>
@@ -1954,14 +1955,13 @@ function renderBudget() {
   const body = document.getElementById("v-body");
   const yes = v => /^(yes|paid in full)$/i.test((v || "").trim());
   if (!budget.vendors.length) {
-    body.innerHTML = `<tr><td colspan="${vendorExpanded ? 10 : 4}" class="muted" style="padding:12px;">No vendors yet. Add one above.</td></tr>`;
+    body.innerHTML = `<tr><td colspan="${vendorExpanded ? 10 : 3}" class="muted" style="padding:12px;">No vendors yet. Add one above.</td></tr>`;
   } else if (!vendorExpanded) {
     body.innerHTML = budget.vendors.map(v => `
       <tr>
-        <td style="font-weight:600;">${esc(v.category) || "—"}</td>
-        <td>${esc(v.vendor) || '<span class="muted">—</span>'}</td>
-        <td>${esc(v.owner) || '<span class="muted">—</span>'}</td>
-        <td style="text-align:right; ${v.amount == null ? "" : "font-weight:600;"}">${v.amount == null ? '<span class="muted">—</span>' : fmtMoney(v.amount)}</td>
+        <td><input type="text" autocomplete="off" data-lpignore="true" data-1p-ignore data-form-type="other" data-vid="${v.id}" data-vfield="category" value="${esc(v.category)}" placeholder="Category" /></td>
+        <td><input type="number" autocomplete="off" data-lpignore="true" data-1p-ignore data-form-type="other" data-vid="${v.id}" data-vfield="amount" value="${v.amount == null ? "" : v.amount}" placeholder="—" style="text-align:right;" /></td>
+        <td><button class="icon-btn" data-vremove="${v.id}" aria-label="Remove vendor" title="Remove">${TRASH_ICON}</button></td>
       </tr>`).join("");
   } else {
     body.innerHTML = budget.vendors.map(v => `
