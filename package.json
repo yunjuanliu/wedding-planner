@@ -1,0 +1,11 @@
+{
+  "name": "wedding-planner",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A single-file wedding planning app: dashboard, to-do, guests, budget, shop list, timeline, and attire tracking.",
+  "scripts": {
+    "dev": "npx serve public",
+    "start": "npx serve public"
+  },
+  "license": "MIT"
+}

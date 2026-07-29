@@ -1,0 +1,2269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Wedding planner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #F8F7FC;
+    --surface: #FFFFFF;
+    --ink: #1D1B29;
+    --ink-soft: #6F6C81;
+    --primary: #6E4CD9;
+    --primary-hover: #5D3FC0;
+    --primary-light: #EFEAFB;
+    --border: #E7E4F1;
+    --white: #FFFFFF;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Inter", -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    padding: 28px 20px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 780px; margin: 0 auto; }
+  h1 {
+    font-family: "Inter", sans-serif;
+    font-weight: 700;
+    font-size: 26px;
+    margin: 0 0 4px;
+    letter-spacing: -0.4px;
+  }
+  .sub { color: var(--ink-soft); font-size: 14px; margin: 0 0 24px; }
+  .tabs {
+    display: flex;
+    gap: 4px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 4px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+  }
+  .tab {
+    padding: 9px 16px;
+    font-size: 13.5px;
+    font-weight: 500;
+    color: var(--ink-soft);
+    cursor: pointer;
+    border-radius: 8px;
+    user-select: none;
+    transition: background 0.15s, color 0.15s;
+  }
+  .tab:hover { color: var(--ink); }
+  .tab.active { color: var(--white); background: var(--primary); font-weight: 600; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 18px 20px;
+    margin-bottom: 14px;
+    box-shadow: 0 1px 2px rgba(28, 27, 41, 0.03);
+  }
+  .stat-row { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+  .stat {
+    flex: 1;
+    min-width: 110px;
+    background: var(--primary-light);
+    border-radius: 12px;
+    padding: 13px 15px;
+  }
+  .stat .num { font-size: 21px; font-weight: 700; color: var(--primary); letter-spacing: -0.3px; }
+  .stat .lbl { font-size: 12px; color: var(--ink-soft); margin-top: 1px; }
+  .progress-bar { height: 8px; border-radius: 5px; background: var(--primary-light); overflow: hidden; }
+  .progress-fill { height: 100%; background: var(--primary); border-radius: 5px; transition: width 0.3s; }
+  input[type=text], input[type=number], input[type=date], select {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 14px;
+    font-family: inherit;
+    background: var(--white);
+    color: var(--ink);
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  input[type=text]:focus, input[type=number]:focus, input[type=date]:focus, select:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px var(--primary-light);
+  }
+  input[type=checkbox] { accent-color: var(--primary); width: 17px; height: 17px; }
+  button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+  }
+  ::placeholder { color: #A6A3B6; }
+  button {
+    border: 1px solid var(--border);
+    background: var(--white);
+    color: var(--ink);
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 13.5px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    font-family: inherit;
+    min-height: 36px;
+  }
+  button:hover { background: var(--primary-light); border-color: var(--primary); }
+  button.primary { background: var(--primary); color: var(--white); border-color: var(--primary); }
+  button.primary:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
+  .icon-btn { padding: 6px 10px; border-color: transparent; color: var(--ink-soft); min-height: 32px; }
+  .icon-btn:hover { background: var(--primary-light); color: var(--primary); border-color: transparent; }
+  @media (max-width: 480px) {
+    body { padding: 16px 12px; }
+    .stat-row { gap: 8px; }
+    .stat { min-width: 100%; }
+    .item-row { gap: 6px; }
+  }
+  .modal-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(29, 27, 41, 0.35);
+    align-items: center; justify-content: center;
+    z-index: 100;
+    padding: 20px;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal-box {
+    background: var(--white);
+    border-radius: 14px;
+    padding: 22px;
+    width: 100%;
+    max-width: 380px;
+    box-shadow: 0 8px 30px rgba(29, 27, 41, 0.18);
+  }
+  .modal-box h3 { margin: 0 0 14px; font-size: 16px; font-weight: 600; }
+  .modal-box input[type=text] { width: 100%; margin-bottom: 16px; }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
+  .task-text { cursor: pointer; border-bottom: 1px dashed transparent; }
+  .task-text:hover { border-bottom-color: var(--primary); color: var(--primary); }
+  .switch {
+    position: relative;
+    display: inline-block;
+    width: 42px;
+    height: 24px;
+    flex: 0 0 auto;
+  }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .switch-track {
+    position: absolute; inset: 0;
+    background: var(--border);
+    border-radius: 24px;
+    transition: background 0.15s;
+    cursor: pointer;
+  }
+  .switch-track::before {
+    content: '';
+    position: absolute;
+    height: 18px; width: 18px;
+    left: 3px; bottom: 3px;
+    background: var(--white);
+    border-radius: 50%;
+    transition: transform 0.15s;
+    box-shadow: 0 1px 3px rgba(28,27,41,0.2);
+  }
+  .switch input:checked + .switch-track { background: var(--primary); }
+  .switch input:checked + .switch-track::before { transform: translateX(18px); }
+  .shop-item-row { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-top: 1px solid var(--border); flex-wrap: wrap; }
+  .shop-item-row:first-child { border-top: none; }
+  .shop-item-name { cursor: pointer; border-bottom: 1px dashed transparent; flex: 2; min-width: 100px; }
+  .shop-item-name:hover { border-bottom-color: var(--primary); color: var(--primary); }
+  .link-btn {
+    border: none;
+    background: none;
+    padding: 0;
+    color: var(--primary);
+    font-weight: 600;
+    font-size: 13.5px;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .link-btn:hover { text-decoration: underline; }
+  .guest-row {
+    display: grid;
+    grid-template-columns: minmax(130px, 2fr) 36px 110px 100px minmax(110px, 1fr) 32px;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 0;
+    border-top: 1px solid var(--border);
+    text-align: left;
+  }
+  .guest-row:first-child { border-top: none; }
+  .guest-row > * { text-align: left; justify-self: start; }
+  .guest-row select { width: 100%; }
+  #g-list { overflow-x: auto; }
+  #g-list .guest-row { min-width: 560px; }
+  .tl-card {
+    position: relative;
+    transition: box-shadow 0.15s, opacity 0.15s;
+  }
+  .tl-card.dragging { opacity: 0.4; }
+  .tl-card.drag-over-top { border-top: 2px solid var(--primary); margin-top: -2px; }
+  .tl-card.drag-over-bottom { border-bottom: 2px solid var(--primary); }
+  .tl-handle {
+    cursor: grab;
+    color: var(--border);
+    opacity: 0;
+    transition: opacity 0.15s, color 0.15s;
+    flex: 0 0 auto;
+    font-size: 15px;
+    line-height: 1;
+    padding: 0 2px;
+    user-select: none;
+  }
+  .tl-card:hover .tl-handle { opacity: 1; }
+  .tl-handle:hover { color: var(--primary); }
+  .tl-handle:active { cursor: grabbing; }
+  .tl-fade { opacity: 0; transition: opacity 0.15s; }
+  .tl-card:hover .tl-fade { opacity: 1; }
+  @keyframes tlPulse {
+    0%   { box-shadow: 0 0 0 3px var(--primary); }
+    100% { box-shadow: 0 1px 2px rgba(28,27,41,0.03); }
+  }
+  .tl-card.jumped { animation: tlPulse 0.6s ease-out forwards; }
+  .item-row.dragging { opacity: 0.4; }
+  .item-row.drag-over-top { border-top: 2px solid var(--primary); margin-top: -2px; }
+  .item-row.drag-over-bottom { border-bottom: 2px solid var(--primary); }
+  .item-row.jumped { animation: tlPulse 0.6s ease-out forwards; border-radius: 8px; }
+  .todo-handle {
+    cursor: grab;
+    color: var(--border);
+    opacity: 0;
+    transition: opacity 0.15s, color 0.15s;
+    flex: 0 0 auto;
+    font-size: 15px;
+    line-height: 1;
+    padding: 0 2px;
+    user-select: none;
+  }
+  .item-row:hover .todo-handle { opacity: 1; }
+  .todo-handle:hover { color: var(--primary); }
+  .todo-handle:active { cursor: grabbing; }
+  .todo-zone { min-height: 6px; }
+  .hero-banner {
+    background: linear-gradient(135deg, var(--primary) 0%, #8B6FE8 100%);
+    border-radius: 16px;
+    padding: 24px 26px;
+    color: #fff;
+    margin-bottom: 16px;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero-banner::before {
+    content: '';
+    position: absolute;
+    right: -40px; top: -40px;
+    width: 160px; height: 160px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.08);
+  }
+  .hero-banner::after {
+    content: '';
+    position: absolute;
+    right: 30px; bottom: -50px;
+    width: 110px; height: 110px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.06);
+  }
+  .hero-days {
+    font-size: 38px;
+    font-weight: 700;
+    letter-spacing: -1px;
+    line-height: 1;
+    position: relative;
+    z-index: 1;
+  }
+  .hero-sub {
+    font-size: 13px;
+    opacity: 0.85;
+    margin-top: 6px;
+    position: relative;
+    z-index: 1;
+  }
+  .icon-stat {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .icon-stat-badge {
+    flex: 0 0 auto;
+    width: 38px; height: 38px;
+    border-radius: 10px;
+    background: var(--white);
+    color: var(--primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 1px 3px rgba(28,27,41,0.06);
+  }
+  .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .item-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+  }
+  .item-row:last-child { border-bottom: none; }
+  .section-title {
+    font-family: "Inter", sans-serif;
+    font-weight: 600;
+    font-size: 15px;
+    margin: 0 0 8px;
+    color: var(--ink);
+  }
+  .section-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--primary);
+    background: var(--primary-light);
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 20px;
+  }
+  .muted { color: var(--ink-soft); font-size: 13px; }
+  .strike { color: var(--ink-soft); text-decoration: line-through; }
+  .add-form { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+  .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+  table.data-table { border-collapse: collapse; width: 100%; min-width: 760px; font-size: 13.5px; }
+  table.data-table th {
+    text-align: left; padding: 10px 10px; background: var(--primary-light); color: var(--primary);
+    font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.3px;
+    white-space: nowrap; position: sticky; top: 0;
+  }
+  table.data-table td { padding: 6px 8px; border-top: 1px solid var(--border); vertical-align: middle; }
+  table.data-table tr:hover td { background: #FBFAFE; }
+  table.data-table input[type=text], table.data-table input[type=number] {
+    border: 1px solid transparent; background: transparent; width: 100%; padding: 6px 6px; border-radius: 6px;
+  }
+  table.data-table input[type=text]:hover, table.data-table input[type=number]:hover { border-color: var(--border); }
+  table.data-table input[type=text]:focus, table.data-table input[type=number]:focus { background: var(--white); border-color: var(--primary); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Wedding planner</h1>
+  <p class="sub">Everything in one place, saved automatically as you go.</p>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="dashboard">Dashboard</div>
+    <div class="tab" data-tab="todo">To-do</div>
+    <div class="tab" data-tab="guests">Guest count</div>
+    <div class="tab" data-tab="budget">Budget</div>
+    <div class="tab" data-tab="activities">Activity table</div>
+    <div class="tab" data-tab="timeline">Timeline</div>
+    <div class="tab" data-tab="dress">Dress</div>
+  </div>
+
+  <div id="panel-dashboard" class="panel active"></div>
+  <div id="panel-todo" class="panel"></div>
+  <div id="panel-shoplist" class="panel"></div>
+  <div id="panel-guests" class="panel"></div>
+  <div id="panel-budget" class="panel"></div>
+  <div id="panel-activities" class="panel"></div>
+  <div id="panel-timeline" class="panel"></div>
+  <div id="panel-dress" class="panel"></div>
+</div>
+
+<div class="modal-overlay" id="tags-modal">
+  <div class="modal-box" style="max-width:340px;">
+    <h3 style="margin:0 0 14px;">Manage tags</h3>
+    <div id="tags-modal-list" style="margin-bottom:14px;"></div>
+    <div class="modal-actions">
+      <button id="tags-modal-close">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="input-modal">
+  <div class="modal-box" style="max-width:340px;">
+    <h3 id="input-modal-title">Edit</h3>
+    <input type="text" id="input-modal-field" />
+    <div class="modal-actions">
+      <button id="input-modal-cancel">Cancel</button>
+      <button class="primary" id="input-modal-save">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="task-modal">
+  <div class="modal-box" style="max-width:440px;">
+
+    <div id="task-view-mode">
+      <div class="row" style="justify-content:space-between; align-items:flex-start; margin-bottom:10px;">
+        <h3 id="tv-title" style="margin:0; word-break:break-word; flex:1;">Task title</h3>
+        <button id="task-edit-btn" style="flex:0 0 auto;">Edit</button>
+      </div>
+      <div id="tv-image-wrap" style="margin-bottom:12px; display:none;">
+        <img id="tv-image" style="width:100%; border-radius:10px; display:block;" />
+      </div>
+      <p id="tv-body" class="muted" style="white-space:pre-wrap; margin:0 0 14px;"></p>
+      <div class="row" style="gap:16px; flex-wrap:wrap; margin-bottom:6px;">
+        <div><span class="muted" style="font-size:12px;">Due date</span><br><span id="tv-due" style="font-weight:500;">—</span></div>
+        <div><span class="muted" style="font-size:12px;">Assignee</span><br><span id="tv-assignee" style="font-weight:500;">Unassigned</span></div>
+      </div>
+      <div class="modal-actions" style="margin-top:16px;">
+        <button id="task-view-close">Close</button>
+      </div>
+    </div>
+
+    <div id="task-edit-mode" style="display:none;">
+      <h3 style="margin:0 0 14px;">Edit task</h3>
+      <label class="muted" style="font-size:12px;">Title</label>
+      <input type="text" id="task-modal-title" style="margin-bottom:12px;" />
+      <label class="muted" style="font-size:12px;">Notes</label>
+      <textarea id="task-modal-body" rows="3" style="width:100%; margin-bottom:12px; border:1px solid var(--border); border-radius:8px; padding:8px 10px; font-family:inherit; font-size:14px; resize:vertical;"></textarea>
+      <div class="row" style="gap:10px; margin-bottom:12px;">
+        <div style="flex:1;">
+          <label class="muted" style="font-size:12px;">Due date</label>
+          <input type="date" id="task-modal-due" style="width:100%;" />
+        </div>
+        <div style="flex:1;">
+          <label class="muted" style="font-size:12px;">Assignee</label>
+          <select id="task-modal-assignee" style="width:100%;"></select>
+        </div>
+      </div>
+      <label class="muted" style="font-size:12px;">Image</label>
+      <div class="row" style="gap:8px; margin-bottom:16px; align-items:center;">
+        <input type="file" id="task-modal-image" accept="image/*" style="flex:1;" />
+        <button id="task-modal-image-remove" type="button" style="flex:0 0 auto;">Remove</button>
+      </div>
+      <div id="task-modal-image-preview-wrap" style="margin:-8px 0 16px; display:none;">
+        <img id="task-modal-image-preview" style="width:100%; max-height:160px; object-fit:cover; border-radius:10px; display:block;" />
+      </div>
+
+      <div style="border-top:1px solid var(--border); padding-top:14px; margin-bottom:16px;">
+        <label style="display:flex; align-items:center; gap:10px; cursor:pointer; font-weight:600; font-size:14px;">
+          <span class="switch">
+            <input type="checkbox" id="task-modal-shop-toggle" />
+            <span class="switch-track"></span>
+          </span>
+          <span id="task-modal-shop-label">Add items to shop list</span>
+        </label>
+        <div id="task-modal-shop-fields" style="display:none; margin-top:12px;">
+          <div class="row" style="font-size:11px; text-transform:uppercase; letter-spacing:0.3px; color:var(--ink-soft); padding:0 0 4px;">
+            <span style="flex:2; min-width:100px;">Item Name</span>
+            <span style="flex:0 0 60px;">Qty</span>
+            <span style="flex:0 0 120px;">Store</span>
+            <span style="flex:0 0 28px;"></span>
+          </div>
+          <div id="task-modal-shop-items"></div>
+          <div id="task-modal-shop-add-row" style="margin-top:8px;"></div>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button id="task-modal-cancel">Cancel</button>
+        <button class="primary" id="task-modal-save">Save</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+let inputModalCallback = null;
+function openInputModal(title, initialValue, onSave, inputType) {
+  document.getElementById("input-modal-title").textContent = title;
+  const field = document.getElementById("input-modal-field");
+  field.type = inputType || "text";
+  field.value = initialValue !== undefined && initialValue !== null ? initialValue : "";
+  inputModalCallback = onSave;
+  document.getElementById("input-modal").classList.add("open");
+  field.focus();
+  field.select();
+}
+function closeInputModal() {
+  inputModalCallback = null;
+  document.getElementById("input-modal").classList.remove("open");
+}
+document.getElementById("input-modal-cancel").addEventListener("click", closeInputModal);
+document.getElementById("input-modal").addEventListener("click", (e) => {
+  if (e.target.id === "input-modal") closeInputModal();
+});
+document.getElementById("input-modal-save").addEventListener("click", async () => {
+  const value = document.getElementById("input-modal-field").value;
+  const cb = inputModalCallback;
+  closeInputModal();
+  if (cb) await cb(value);
+});
+document.getElementById("input-modal-field").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") document.getElementById("input-modal-save").click();
+});
+
+function openTagsModal() {
+  renderTagsModalList();
+  document.getElementById("tags-modal").classList.add("open");
+}
+function closeTagsModal() {
+  document.getElementById("tags-modal").classList.remove("open");
+}
+function renderTagsModalList() {
+  const list = document.getElementById("tags-modal-list");
+  if (helperTags.length === 0) {
+    list.innerHTML = '<p class="muted">No tags yet.</p>';
+    return;
+  }
+  list.innerHTML = helperTags.map(t => `
+    <div class="item-row">
+      <span style="flex:1;">${t.name}</span>
+      <button class="icon-btn" data-remove-tag-modal="${t.id}" aria-label="Remove ${t.name}">${TRASH_ICON}</button>
+    </div>`).join("");
+  list.querySelectorAll("[data-remove-tag-modal]").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      const tagId = e.currentTarget.dataset.removeTagModal;
+      helperTags = helperTags.filter(t => t.id !== tagId);
+      renderTagsModalList();
+      renderTodo();
+      saveKey("wedding-helper-tags", helperTags);
+    });
+  });
+}
+document.getElementById("tags-modal-close").addEventListener("click", closeTagsModal);
+document.getElementById("tags-modal").addEventListener("click", (e) => {
+  if (e.target.id === "tags-modal") closeTagsModal();
+});
+
+let editingTask = null;
+let pendingImageData = null;
+
+function fillAssigneeSelect(selectEl, currentValue) {
+  const options = ["<option value=\"\">Unassigned</option>"]
+    .concat(helperTags.map(t => `<option value="${t.name}">${t.name}</option>`))
+    .join("");
+  selectEl.innerHTML = options;
+  selectEl.value = currentValue || "";
+}
+let storeOptions = [];
+function fillStoreSelect(selectEl, currentValue) {
+  const options = ["<option value=\"\">No store</option>"]
+    .concat(storeOptions.map(s => `<option value="${s.name}">${s.name}</option>`))
+    .join("");
+  selectEl.innerHTML = options;
+  selectEl.value = currentValue || "";
+}
+document.getElementById("task-modal-shop-toggle").addEventListener("change", (e) => {
+  document.getElementById("task-modal-shop-fields").style.display = e.target.checked ? "block" : "none";
+});
+
+function showTaskPreview(item) {
+  document.getElementById("task-edit-mode").style.display = "none";
+  document.getElementById("task-view-mode").style.display = "block";
+  document.getElementById("tv-title").textContent = item.text;
+  document.getElementById("tv-body").textContent = item.body || "No notes added.";
+  document.getElementById("tv-due").textContent = item.dueDate || "Not set";
+  document.getElementById("tv-assignee").textContent = item.assignee || "Unassigned";
+  const imgWrap = document.getElementById("tv-image-wrap");
+  if (item.image) {
+    imgWrap.style.display = "block";
+    document.getElementById("tv-image").src = item.image;
+  } else {
+    imgWrap.style.display = "none";
+  }
+}
+
+function showTaskEditForm(item) {
+  document.getElementById("task-view-mode").style.display = "none";
+  document.getElementById("task-edit-mode").style.display = "block";
+  document.getElementById("task-modal-title").value = item.text || "";
+  document.getElementById("task-modal-body").value = item.body || "";
+  document.getElementById("task-modal-due").value = item.dueDate || "";
+  fillAssigneeSelect(document.getElementById("task-modal-assignee"), item.assignee);
+  pendingImageData = item.image || null;
+  document.getElementById("task-modal-image").value = "";
+  const previewWrap = document.getElementById("task-modal-image-preview-wrap");
+  if (pendingImageData) {
+    previewWrap.style.display = "block";
+    document.getElementById("task-modal-image-preview").src = pendingImageData;
+  } else {
+    previewWrap.style.display = "none";
+  }
+
+  const linkedIds = getShopItemIds(item);
+  const shopToggle = document.getElementById("task-modal-shop-toggle");
+  const shopFields = document.getElementById("task-modal-shop-fields");
+  shopToggle.checked = linkedIds.length > 0;
+  shopFields.style.display = linkedIds.length > 0 ? "block" : "none";
+  shopAddOpen = false;
+  renderShopItemsTable();
+  renderShopAddRow();
+}
+
+function getShopItemIds(item) {
+  if (item.shopItemIds) return item.shopItemIds;
+  if (item.shopItemId) return [item.shopItemId];
+  return [];
+}
+
+let shopItemEditingId = null;
+function renderShopItemsTable() {
+  const item = getEditingItem();
+  const wrap = document.getElementById("task-modal-shop-items");
+  if (!item || !wrap) return;
+  const ids = getShopItemIds(item);
+  const rows = ids.map(id => shopList.find(r => r.id === id)).filter(Boolean);
+  if (rows.length === 0) {
+    wrap.innerHTML = '<p class="muted" style="font-size:13px; padding:4px 0;">No items yet. Add one below.</p>';
+    return;
+  }
+  wrap.innerHTML = rows.map(row => {
+    if (shopItemEditingId === row.id) {
+      const storeOpts = ["<option value=\"\">No store</option>"]
+        .concat(storeOptions.map(s => `<option value="${s.name}" ${row.store===s.name?"selected":""}>${s.name}</option>`))
+        .join("");
+      return `<div class="shop-item-row" style="flex-direction:column; align-items:stretch; gap:6px;">
+        <div class="row" style="gap:8px;">
+          <input type="text" data-shop-edit-field="item" data-shop-edit-id="${row.id}" value="${row.item || ""}" placeholder="Item name" style="flex:2; min-width:100px;" />
+          <input type="number" min="1" data-shop-edit-field="qtyNeeded" data-shop-edit-id="${row.id}" value="${row.qtyNeeded || 1}" style="flex:0 0 60px;" />
+          <select data-shop-edit-field="store" data-shop-edit-id="${row.id}" style="flex:0 0 120px;">${storeOpts}</select>
+          <button class="icon-btn" data-shop-remove-id="${row.id}" aria-label="Remove item">${TRASH_ICON}</button>
+        </div>
+        <input type="text" data-shop-edit-field="notes" data-shop-edit-id="${row.id}" value="${row.notes || ""}" placeholder="Note" style="width:100%;" />
+        <button data-shop-done-id="${row.id}" style="align-self:flex-end;">Done</button>
+      </div>`;
+    }
+    return `<div class="shop-item-row">
+      <span class="shop-item-name" data-shop-open-id="${row.id}">${row.item || ""}</span>
+      <span class="muted" style="flex:0 0 60px;">${row.qtyNeeded || 1}</span>
+      <span class="muted" style="flex:0 0 120px;">${row.store || "\u2014"}</span>
+      <button class="icon-btn" data-shop-remove-id="${row.id}" aria-label="Remove item" style="flex:0 0 28px;">${TRASH_ICON}</button>
+    </div>`;
+  }).join("");
+
+  wrap.querySelectorAll("[data-shop-open-id]").forEach(el => {
+    el.addEventListener("click", (e) => {
+      shopItemEditingId = e.currentTarget.dataset.shopOpenId;
+      renderShopItemsTable();
+    });
+  });
+  wrap.querySelectorAll("[data-shop-done-id]").forEach(el => {
+    el.addEventListener("click", () => {
+      shopItemEditingId = null;
+      renderShopItemsTable();
+    });
+  });
+  wrap.querySelectorAll("[data-shop-remove-id]").forEach(el => {
+    el.addEventListener("click", (e) => {
+      const id = e.currentTarget.dataset.shopRemoveId;
+      removeShopItem(id);
+    });
+  });
+  wrap.querySelectorAll("[data-shop-edit-field]").forEach(el => {
+    el.addEventListener("change", (e) => {
+      const id = e.currentTarget.dataset.shopEditId;
+      const field = e.currentTarget.dataset.shopEditField;
+      const row = shopList.find(r => r.id === id);
+      if (!row) return;
+      row[field] = e.currentTarget.value;
+      saveKey("wedding-shop-list", shopList);
+      renderShopList();
+      if (field === "item") renderShopItemsTable();
+    });
+  });
+}
+
+function addShopItemFromModal(name, qty, store, notes) {
+  const trimmed = name.trim();
+  if (!trimmed) return;
+  const item = getEditingItem();
+  if (!item) return;
+  const newRow = { id: uid(), category: "", item: trimmed, qtyNeeded: qty || 1, store: store || "", notes: (notes || "").trim() };
+  shopList.push(newRow);
+  const ids = getShopItemIds(item);
+  ids.push(newRow.id);
+  item.shopItemIds = ids;
+  delete item.shopItemId;
+  saveKey("wedding-shop-list", shopList);
+  saveKey("wedding-todo-items", todoData);
+  renderShopItemsTable();
+  renderShopList();
+}
+
+function removeShopItem(id) {
+  const item = getEditingItem();
+  shopList = shopList.filter(r => r.id !== id);
+  if (item) {
+    item.shopItemIds = getShopItemIds(item).filter(x => x !== id);
+    delete item.shopItemId;
+    saveKey("wedding-todo-items", todoData);
+  }
+  saveKey("wedding-shop-list", shopList);
+  renderShopItemsTable();
+  renderShopList();
+}
+
+let shopAddOpen = false;
+function renderShopAddRow() {
+  const wrap = document.getElementById("task-modal-shop-add-row");
+  if (!wrap) return;
+  if (!shopAddOpen) {
+    wrap.innerHTML = `<button class="link-btn" id="shop-add-trigger">+ Add Shop List</button>`;
+    document.getElementById("shop-add-trigger").addEventListener("click", () => {
+      shopAddOpen = true;
+      renderShopAddRow();
+    });
+    return;
+  }
+  wrap.innerHTML = `<div style="border-top:1px dashed var(--border); padding-top:8px;">
+    <input type="text" id="task-modal-shop-new-item" placeholder="Item name" style="width:100%; margin-bottom:8px;" />
+    <div class="row" style="gap:8px; margin-bottom:8px;">
+      <input type="number" id="task-modal-shop-new-qty" min="1" value="1" placeholder="Qty" style="flex:1;" />
+      <select id="task-modal-shop-new-store" style="flex:1;"></select>
+    </div>
+    <input type="text" id="task-modal-shop-new-notes" placeholder="Note" style="width:100%; margin-bottom:8px;" />
+    <div class="row" style="justify-content:flex-end;">
+      <button class="primary" id="task-modal-shop-new-add">Add item</button>
+    </div>
+  </div>`;
+  fillStoreSelect(document.getElementById("task-modal-shop-new-store"), "");
+  const input = document.getElementById("task-modal-shop-new-item");
+  const qtyInput = document.getElementById("task-modal-shop-new-qty");
+  const storeSelect = document.getElementById("task-modal-shop-new-store");
+  const notesInput = document.getElementById("task-modal-shop-new-notes");
+  input.focus();
+  function trySave() {
+    if (!input.value.trim()) { input.focus(); return; }
+    addShopItemFromModal(input.value, qtyInput.value, storeSelect.value, notesInput.value);
+    input.value = "";
+    qtyInput.value = 1;
+    storeSelect.value = "";
+    notesInput.value = "";
+    input.focus();
+  }
+  document.getElementById("task-modal-shop-new-add").addEventListener("click", trySave);
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); trySave(); } });
+  qtyInput.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); trySave(); } });
+  storeSelect.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); trySave(); } });
+  notesInput.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); trySave(); } });
+}
+
+function getEditingItem() {
+  if (!editingTask) return null;
+  const section = todoData.find(s => s.id === editingTask.sectionId);
+  return section && section.items.find(i => i.id === editingTask.itemId);
+}
+
+function openTaskEditModal(sectionId, itemId, startInEdit) {
+  const section = todoData.find(s => s.id === sectionId);
+  const item = section && section.items.find(i => i.id === itemId);
+  if (!item) return;
+  editingTask = { sectionId, itemId };
+  if (startInEdit) {
+    showTaskEditForm(item);
+  } else {
+    showTaskPreview(item);
+  }
+  document.getElementById("task-modal").classList.add("open");
+}
+function closeTaskEditModal() {
+  editingTask = null;
+  pendingImageData = null;
+  document.getElementById("task-modal").classList.remove("open");
+}
+
+document.getElementById("task-edit-btn").addEventListener("click", () => {
+  const item = getEditingItem();
+  if (item) showTaskEditForm(item);
+});
+document.getElementById("task-view-close").addEventListener("click", closeTaskEditModal);
+document.getElementById("task-modal-cancel").addEventListener("click", () => {
+  closeTaskEditModal();
+});
+document.getElementById("task-modal").addEventListener("click", (e) => {
+  if (e.target.id === "task-modal") closeTaskEditModal();
+});
+document.getElementById("task-modal-image").addEventListener("change", (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    pendingImageData = reader.result;
+    const previewWrap = document.getElementById("task-modal-image-preview-wrap");
+    previewWrap.style.display = "block";
+    document.getElementById("task-modal-image-preview").src = pendingImageData;
+  };
+  reader.readAsDataURL(file);
+});
+document.getElementById("task-modal-image-remove").addEventListener("click", () => {
+  pendingImageData = null;
+  document.getElementById("task-modal-image").value = "";
+  document.getElementById("task-modal-image-preview-wrap").style.display = "none";
+});
+document.getElementById("task-modal-save").addEventListener("click", async () => {
+  if (!editingTask) return;
+  const title = document.getElementById("task-modal-title").value.trim();
+  if (!title) return;
+  const section = todoData.find(s => s.id === editingTask.sectionId);
+  const item = section && section.items.find(i => i.id === editingTask.itemId);
+  if (item) {
+    item.text = title;
+    item.body = document.getElementById("task-modal-body").value.trim();
+    item.dueDate = document.getElementById("task-modal-due").value;
+    item.assignee = document.getElementById("task-modal-assignee").value;
+    item.image = pendingImageData || "";
+    saveKey("wedding-todo-items", todoData);
+  }
+  closeTaskEditModal();
+  renderTodo();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && document.getElementById("task-modal").classList.contains("open")) {
+    closeTaskEditModal();
+  }
+});
+
+function goToTab(name) {
+  document.querySelectorAll(".tab").forEach(x => x.classList.remove("active"));
+  document.querySelectorAll(".panel").forEach(x => x.classList.remove("active"));
+  const tabBtn = document.querySelector(`.tab[data-tab="${name}"]`);
+  if (tabBtn) tabBtn.classList.add("active");
+  document.getElementById("panel-" + name).classList.add("active");
+  if (name === "dashboard") renderDashboard();
+  if (name === "shoplist") renderShopList();
+}
+
+document.querySelectorAll(".tab").forEach(t => {
+  t.addEventListener("click", () => goToTab(t.dataset.tab));
+});
+
+function uid() { return Math.random().toString(36).slice(2, 9); }
+const TRASH_ICON = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 6V4a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2"></path></svg>';
+function icon(name, size) {
+  const s = size || 18;
+  const paths = {
+    users: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path>',
+    wallet: '<path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"></path><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"></path><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"></path>',
+    check: '<path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>',
+    heart: '<path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.29 1.51 4.04 3 5.5l7 7Z"></path>',
+    cart: '<circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>',
+  };
+  return `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${paths[name] || ""}</svg>`;
+}
+async function saveKey(key, value) {
+  try { await window.storage.set(key, JSON.stringify(value)); } catch (e) {}
+}
+async function loadKey(key) {
+  try {
+    const r = await window.storage.get(key);
+    return r && r.value ? JSON.parse(r.value) : null;
+  } catch (e) { return null; }
+}
+
+const WEDDING_DATE = new Date(2026, 8, 19); // September 19, 2026
+const SECTION_DAY_RANGES = {
+  s1: {startDaysBefore: 70, endDaysBefore: 56},  // 10-8 weeks out
+  s2: {startDaysBefore: 42, endDaysBefore: 28},  // 6-4 weeks out
+  s3: {startDaysBefore: 21, endDaysBefore: 14},  // 3-2 weeks out
+  s4: {startDaysBefore: 7, endDaysBefore: 1},    // week of
+  s5: {startDaysBefore: 1, endDaysBefore: 1},    // day before
+  s6: {startDaysBefore: 0, endDaysBefore: 0},    // day of
+};
+function fmtDate(d) {
+  return d.toLocaleDateString(undefined, {month:"short", day:"numeric"});
+}
+function sectionDateLabel(sectionId) {
+  const range = SECTION_DAY_RANGES[sectionId];
+  if (!range) return "";
+  const start = new Date(WEDDING_DATE);
+  start.setDate(start.getDate() - range.startDaysBefore);
+  const end = new Date(WEDDING_DATE);
+  end.setDate(end.getDate() - range.endDaysBefore);
+  if (range.startDaysBefore === range.endDaysBefore) return fmtDate(start);
+  return fmtDate(start) + " – " + fmtDate(end);
+}
+function sectionDateStatus(sectionId) {
+  const range = SECTION_DAY_RANGES[sectionId];
+  if (!range) return "none";
+  const today = new Date(); today.setHours(0,0,0,0);
+  const start = new Date(WEDDING_DATE);
+  start.setDate(start.getDate() - range.startDaysBefore);
+  start.setHours(0,0,0,0);
+  const end = new Date(WEDDING_DATE);
+  end.setDate(end.getDate() - range.endDaysBefore);
+  end.setHours(23,59,59,999);
+  if (today >= start && today <= end) return "current";
+  if (today > end) return "past";
+  return "upcoming";
+}
+
+const TODO_DEFAULTS = [
+  {id:"s1", label:"8-10 weeks out", items:["Confirm final guest headcount","Send invitations","Book hair and makeup trial","Order wedding bands","Finalize menu and tasting","Book rehearsal dinner venue","Arrange transportation for wedding day"]},
+  {id:"s2", label:"4-6 weeks out", items:["Finalize floral order","Confirm contracts and final payments with vendors","Write vows","Draft day-of timeline","Order or assemble favors","Schedule final dress or suit fitting","Block hotel rooms for out-of-town guests","Finalize music and playlist with DJ or band","Check your state's marriage license requirements and timing"]},
+  {id:"s3", label:"2-3 weeks out", items:["Give final headcount to caterer and venue","Confirm arrival times with every vendor","Finalize seating chart","Prepare tip and final payment envelopes","Pick up rings","Break in wedding shoes","Pack for honeymoon","Assign day-of tasks to a helper or coordinator"]},
+  {id:"s4", label:"Week of", items:["Rehearsal and rehearsal dinner","Confirm delivery times for flowers, cake, rentals","Pick up final alterations","Pack an emergency kit","Reconfirm transportation and timeline with vendors","Get marriage license if required in this window"]},
+  {id:"s5", label:"Day before", items:["Delegate decor and setup to helpers","Pack overnight and getting-ready bags","Eat, hydrate, and get real sleep","Do a final walk-through with your coordinator or venue"]},
+  {id:"s6", label:"Day of", items:["Eat breakfast","Give emergency kit to a helper","Follow the hair, makeup, and photo timeline","Enjoy it"]},
+];
+let todoData = [];
+let todoState = {};
+let helperTags = [];
+let todoDoneOpen = false;
+let todoDragId = null;
+let todoDragSection = null;
+let todoJumpId = null;
+
+function todoRowHtml(sectionId, item, draggable) {
+  const checked = !!todoState[item.id];
+  const assignee = item.assignee || "";
+  const options = ["<option value=\"\">Unassigned</option>"]
+    .concat(helperTags.map(t => `<option value="${t.name}" ${assignee===t.name?"selected":""}>${t.name}</option>`))
+    .concat(["<option value=\"__add_new__\">+ Add new\u2026</option>", "<option value=\"__manage__\">\u270e Manage tags\u2026</option>"])
+    .join("");
+  const dragAttrs = draggable ? `draggable="true" data-todo-id="${item.id}" data-todo-section="${sectionId}"` : "";
+  const handle = draggable ? `<span class="todo-handle" data-todo-handle title="Drag to move">⠿</span>` : "";
+  const linked = (item.shopItemIds && item.shopItemIds.length > 0) || !!item.shopItemId;
+  return `<div class="item-row" ${dragAttrs}>
+        ${handle}
+        <label style="display:flex; align-items:center; gap:10px; flex:1; min-width:160px; cursor:pointer;">
+          <input type="checkbox" data-key="${item.id}" ${checked ? "checked" : ""} style="width:16px; height:16px;" />
+          <span class="task-text ${checked ? "strike" : ""}" data-edit-section="${sectionId}" data-edit-item="${item.id}">${item.text}</span>
+        </label>
+        <input type="date" data-due-section="${sectionId}" data-due-item="${item.id}" value="${item.dueDate || ""}" style="flex:0 0 145px;" />
+        <select data-assign-section="${sectionId}" data-assign-item="${item.id}" style="flex:0 0 150px;">${options}</select>
+        <button class="icon-btn" data-shop-toggle-section="${sectionId}" data-shop-toggle-item="${item.id}" aria-label="${linked ? "On shop list" : "Add to shop list"}" title="${linked ? "On shop list \u2014 click to edit" : "Add to shop list"}" style="${linked ? "background:var(--primary-light); color:var(--primary); border-color:transparent;" : ""}">${icon("cart", 15)}</button>
+        <button class="icon-btn" data-remove-section="${sectionId}" data-remove-item="${item.id}" aria-label="Remove task">${TRASH_ICON}</button>
+      </div>`;
+}
+
+function renderTodo() {
+  const p = document.getElementById("panel-todo");
+  let totalDone = 0, totalItems = 0;
+  todoData.forEach(s => { s.items.forEach(item => { totalItems++; if (todoState[item.id]) totalDone++; }); });
+  const pct = totalItems ? Math.round(totalDone/totalItems*100) : 0;
+
+  const shopTotalItems = shopList.length;
+  const shopStoreBreakdown = {};
+  shopList.forEach(r => { const k = r.store || "No store set"; shopStoreBreakdown[k] = (shopStoreBreakdown[k]||0) + 1; });
+  const shopStoreSummary = Object.entries(shopStoreBreakdown)
+    .sort((a,b) => b[1]-a[1])
+    .slice(0, 3)
+    .map(([store, count]) => `${store} (${count})`)
+    .join(" \u00b7 ");
+
+  let html = `
+  <div class="row" style="gap:14px; align-items:stretch; margin-bottom:16px; flex-wrap:wrap;">
+    <button id="goto-shoplist-btn" style="flex:1; min-width:220px; text-align:left; border:none; cursor:pointer; padding:0; font-family:inherit;">
+      <div class="hero-banner" style="height:100%; padding:18px 20px; display:flex; flex-direction:column; justify-content:center; gap:10px; box-sizing:border-box;">
+        <div style="width:40px; height:40px; border-radius:10px; background:rgba(255,255,255,0.18); display:flex; align-items:center; justify-content:center; color:#fff; position:relative; z-index:1;">${icon("cart", 20)}</div>
+        <div style="position:relative; z-index:1;">
+          <div style="font-size:16px; font-weight:700; color:#fff;">Shop List &rarr;</div>
+          <div style="font-size:13px; color:rgba(255,255,255,0.85); margin-top:2px;">
+            ${shopTotalItems === 0 ? "No items yet \u2014 tap to start" : `${shopTotalItems} item${shopTotalItems === 1 ? "" : "s"}${shopStoreSummary ? " \u00b7 " + shopStoreSummary : ""}`}
+          </div>
+        </div>
+      </div>
+    </button>
+    <div class="card" style="flex:1; min-width:220px; margin-bottom:0; box-sizing:border-box;">
+      <div class="row" style="justify-content:space-between; margin-bottom:8px;">
+        <p class="section-title" style="margin:0;">To-do progress</p>
+        <span style="font-weight:700; color:var(--primary); font-size:15px;">${pct}%</span>
+      </div>
+      <div class="progress-bar" style="height:10px; margin-bottom:14px;"><div class="progress-fill" style="width:${pct}%;"></div></div>
+      <div class="icon-stat">
+        <div class="icon-stat-badge">${icon("check")}</div>
+        <div>
+          <div class="num">${totalDone} / ${totalItems}</div>
+          <div class="lbl">Tasks done</div>
+        </div>
+      </div>
+    </div>
+  </div>`;
+  const statusOrder = { current: 0, upcoming: 1, past: 2, none: 1 };
+  const orderedSections = [...todoData].sort((a, b) => {
+    const sa = statusOrder[sectionDateStatus(a.id)];
+    const sb = statusOrder[sectionDateStatus(b.id)];
+    if (sa !== sb) return sa - sb;
+    return 0;
+  });
+
+  orderedSections.forEach(s => {
+    const done = s.items.filter(item => todoState[item.id]).length;
+    const dateLabel = sectionDateLabel(s.id);
+    const activeItems = s.items.filter(item => !todoState[item.id]);
+    const status = sectionDateStatus(s.id);
+    const cardStyle = status === "current"
+      ? "border:2px solid var(--primary); box-shadow:0 0 0 3px var(--primary-light);"
+      : status === "past" ? "opacity:0.7;" : "";
+    html += `<div class="card" style="${cardStyle}"><div class="row" style="justify-content:space-between; margin-bottom:6px;">
+      <div>
+        <div class="row" style="gap:8px; align-items:center;">
+          <p class="section-title" style="margin:0;">${s.label}</p>
+          ${status === "current" ? '<span style="background:var(--primary); color:#fff; font-size:11px; font-weight:700; padding:2px 8px; border-radius:10px;">TODAY</span>' : ""}
+        </div>
+        ${dateLabel ? `<p class="muted" style="margin:2px 0 0; font-size:12px;">${dateLabel}</p>` : ""}
+      </div>
+      <span class="muted">${done}/${s.items.length}</span></div>`;
+    html += `<div class="todo-zone" data-todo-zone="${s.id}">`;
+    if (activeItems.length === 0) {
+      html += `<p class="muted" style="font-size:13px; padding:4px 0;">All tasks in this section are done. Drag a task here to move it in.</p>`;
+    }
+    activeItems.forEach(item => {
+      html += todoRowHtml(s.id, item, true);
+    });
+    html += `</div>`;
+    html += `<div class="add-form" style="margin:10px 0 0;">
+      <input type="text" data-add-section="${s.id}" placeholder="Add a task" style="flex:1; min-width:150px;" />
+      <button data-add-btn="${s.id}">Add task</button>
+    </div></div>`;
+  });
+
+  const doneList = [];
+  todoData.forEach(s => s.items.forEach(item => { if (todoState[item.id]) doneList.push({sectionId: s.id, sectionLabel: s.label, item}); }));
+  if (doneList.length > 0) {
+    html += `<div class="card">
+      <button id="todo-done-toggle" style="border:none; background:none; padding:0; display:flex; align-items:center; gap:6px; cursor:pointer; font-family:inherit;">
+        <span class="section-title" style="margin:0;">Completed (${doneList.length})</span>
+        <span class="muted" style="font-size:12px;">${todoDoneOpen ? "Hide ▲" : "Show ▼"}</span>
+      </button>
+      ${todoDoneOpen ? `<div style="margin-top:10px;">${doneList.map(({sectionId, sectionLabel, item}) => `
+        <div style="margin-bottom:2px;">
+          <span class="muted" style="font-size:11px; text-transform:uppercase; letter-spacing:0.3px;">${sectionLabel}</span>
+          ${todoRowHtml(sectionId, item, false)}
+        </div>`).join("")}</div>` : ""}
+    </div>`;
+  }
+
+  p.innerHTML = html;
+
+  document.getElementById("goto-shoplist-btn").addEventListener("click", () => goToTab("shoplist"));
+
+  bindTodoDrag(p);
+  if (todoJumpId) {
+    const el = p.querySelector(`[data-todo-id="${todoJumpId}"]`);
+    if (el) {
+      el.classList.add("jumped");
+      el.addEventListener("animationend", () => el.classList.remove("jumped"), {once:true});
+    }
+    todoJumpId = null;
+  }
+
+  document.getElementById("todo-done-toggle") && document.getElementById("todo-done-toggle").addEventListener("click", () => {
+    todoDoneOpen = !todoDoneOpen;
+    renderTodo();
+  });
+
+  p.querySelectorAll("input[type=checkbox]").forEach(cb => {
+    cb.addEventListener("change", (e) => {
+      todoState[e.target.dataset.key] = e.target.checked;
+      renderTodo();
+      saveKey("wedding-checklist", todoState);
+    });
+  });
+  p.querySelectorAll(".task-text").forEach(span => {
+    span.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      openTaskEditModal(span.dataset.editSection, span.dataset.editItem, true);
+    });
+  });
+  p.querySelectorAll("[data-assign-item]").forEach(sel => {
+    sel.addEventListener("change", (e) => {
+      const sectionId = e.target.dataset.assignSection;
+      const itemId = e.target.dataset.assignItem;
+      const section = todoData.find(s => s.id === sectionId);
+      const item = section.items.find(i => i.id === itemId);
+      if (e.target.value === "__add_new__") {
+        e.target.value = item.assignee || "";
+        openInputModal("Helper name", "", (name) => {
+          const trimmed = name.trim();
+          if (!trimmed) return;
+          helperTags.push({id: uid(), name: trimmed});
+          item.assignee = trimmed;
+          renderTodo();
+          saveKey("wedding-helper-tags", helperTags);
+          saveKey("wedding-todo-items", todoData);
+        });
+        return;
+      }
+      if (e.target.value === "__manage__") {
+        e.target.value = item.assignee || "";
+        openTagsModal();
+        return;
+      }
+      item.assignee = e.target.value;
+      renderTodo();
+      saveKey("wedding-todo-items", todoData);
+    });
+  });
+  p.querySelectorAll("[data-due-item]").forEach(inp => {
+    inp.addEventListener("change", (e) => {
+      const sectionId = e.target.dataset.dueSection;
+      const itemId = e.target.dataset.dueItem;
+      const section = todoData.find(s => s.id === sectionId);
+      const item = section.items.find(i => i.id === itemId);
+      item.dueDate = e.target.value;
+      renderTodo();
+      saveKey("wedding-todo-items", todoData);
+    });
+  });
+  p.querySelectorAll("[data-shop-toggle-item]").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      const sectionId = e.currentTarget.dataset.shopToggleSection;
+      const itemId = e.currentTarget.dataset.shopToggleItem;
+      openTaskEditModal(sectionId, itemId, true);
+    });
+  });
+  p.querySelectorAll("[data-remove-item]").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      const sectionId = e.currentTarget.dataset.removeSection;
+      const itemId = e.currentTarget.dataset.removeItem;
+      const section = todoData.find(s => s.id === sectionId);
+      section.items = section.items.filter(i => i.id !== itemId);
+      delete todoState[itemId];
+      renderTodo();
+      saveKey("wedding-todo-items", todoData);
+      saveKey("wedding-checklist", todoState);
+    });
+  });
+  function addTask(sectionId) {
+    const input = p.querySelector(`[data-add-section="${sectionId}"]`);
+    const text = input.value.trim();
+    if (!text) return;
+    const section = todoData.find(s => s.id === sectionId);
+    section.items.push({id: uid(), text, assignee: "", body: "", dueDate: "", image: ""});
+    renderTodo();
+    saveKey("wedding-todo-items", todoData);
+  }
+  p.querySelectorAll("[data-add-btn]").forEach(btn => {
+    btn.addEventListener("click", (e) => addTask(e.currentTarget.dataset.addBtn));
+  });
+  p.querySelectorAll("[data-add-section]").forEach(input => {
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") addTask(input.dataset.addSection);
+    });
+  });
+}
+
+function bindTodoDrag(p) {
+  p.querySelectorAll(".item-row[draggable=true]").forEach(row => {
+    row.addEventListener("dragstart", (e) => {
+      if (["INPUT","SELECT","TEXTAREA","BUTTON"].includes(e.target.tagName)) {
+        e.preventDefault();
+        return;
+      }
+      todoDragId = row.dataset.todoId;
+      todoDragSection = row.dataset.todoSection;
+      row.classList.add("dragging");
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", "");
+    });
+    row.addEventListener("dragend", () => {
+      row.classList.remove("dragging");
+      p.querySelectorAll(".item-row").forEach(r => r.classList.remove("drag-over-top","drag-over-bottom"));
+      todoDragId = null;
+      todoDragSection = null;
+    });
+    row.addEventListener("dragover", (e) => {
+      if (!todoDragId) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      const rect = row.getBoundingClientRect();
+      const mid = rect.top + rect.height / 2;
+      row.classList.remove("drag-over-top","drag-over-bottom");
+      row.classList.add(e.clientY < mid ? "drag-over-top" : "drag-over-bottom");
+    });
+    row.addEventListener("dragleave", () => {
+      row.classList.remove("drag-over-top","drag-over-bottom");
+    });
+    row.addEventListener("drop", (e) => {
+      if (!todoDragId) return;
+      e.preventDefault();
+      e.stopPropagation();
+      row.classList.remove("drag-over-top","drag-over-bottom");
+      if (todoDragId === row.dataset.todoId) return;
+      const rect = row.getBoundingClientRect();
+      const after = e.clientY >= rect.top + rect.height / 2;
+      performTodoMove(todoDragId, todoDragSection, row.dataset.todoSection, row.dataset.todoId, after);
+    });
+  });
+  p.querySelectorAll(".todo-zone").forEach(zone => {
+    zone.addEventListener("dragover", (e) => { if (todoDragId) e.preventDefault(); });
+    zone.addEventListener("drop", (e) => {
+      if (!todoDragId) return;
+      if (e.target.closest(".item-row[draggable=true]")) return;
+      e.preventDefault();
+      performTodoMove(todoDragId, todoDragSection, zone.dataset.todoZone, null, true);
+    });
+  });
+}
+
+function performTodoMove(itemId, fromSectionId, toSectionId, targetItemId, after) {
+  const fromSection = todoData.find(s => s.id === fromSectionId);
+  if (!fromSection) return;
+  const idx = fromSection.items.findIndex(i => i.id === itemId);
+  if (idx === -1) return;
+  const [moved] = fromSection.items.splice(idx, 1);
+  const toSection = todoData.find(s => s.id === toSectionId) || fromSection;
+  if (targetItemId) {
+    let targetIdx = toSection.items.findIndex(i => i.id === targetItemId);
+    if (targetIdx === -1) targetIdx = toSection.items.length;
+    const insertAt = Math.max(0, Math.min(after ? targetIdx + 1 : targetIdx, toSection.items.length));
+    toSection.items.splice(insertAt, 0, moved);
+  } else {
+    toSection.items.push(moved);
+  }
+  todoJumpId = moved.id;
+  renderTodo();
+  saveKey("wedding-todo-items", todoData);
+}
+
+const GUEST_SEED = [
+  {name:"Xiaoming Gu Family", partySize:4, plusOne:"Wen Zhang, Ethan Gu, Lingxuan Gu", transport:"Driving", accommodation:"", dietary:"", mailed:true},
+  {name:"Xinhuan Chen", partySize:1, plusOne:"", transport:"Flying", accommodation:"Shared Rooms / Hotel Block", dietary:"", mailed:true},
+  {name:"Xia Qian", partySize:2, plusOne:"Mike", transport:"Driving", accommodation:"", dietary:"", mailed:true},
+  {name:"Krystal Zheng", partySize:2, plusOne:"Kevin Von", transport:"Driving", accommodation:"", dietary:"", mailed:true},
+  {name:"Leo Liu", partySize:2, plusOne:"Shuyi Liu", transport:"Driving", accommodation:"", dietary:"", mailed:true},
+  {name:"Sherry Eckholm", partySize:2, plusOne:"Hans Eckholm", transport:"Driving", accommodation:"", dietary:"", mailed:true},
+  {name:"Lan Liu", partySize:1, plusOne:"", transport:"Flying", accommodation:"Shared Rooms", dietary:"", mailed:true},
+  {name:"Fia Zhang", partySize:2, plusOne:"Wuqiong Shang", transport:"Driving", accommodation:"", dietary:"", mailed:true},
+  {name:"Koi Chen", partySize:1, plusOne:"", transport:"Flying", accommodation:"Outdoor Adventure / Shared Rooms", dietary:"", mailed:true},
+  {name:"Becky Splitt", partySize:2, plusOne:"Kelly Splitt", transport:"Driving", accommodation:"", dietary:"", mailed:true},
+  {name:"Yiting Cai", partySize:2, plusOne:"Di Yang (+ Sydney Yang)", transport:"Flying", accommodation:"Hotel Block", dietary:"", mailed:true},
+  {name:"Minami Knight", partySize:2, plusOne:"Justin Knight", transport:"Driving", accommodation:"", dietary:"", mailed:true},
+  {name:"Donal Warde", partySize:1, plusOne:"", transport:"Flying", accommodation:"Hotel Block", dietary:"", mailed:true},
+  {name:"Michelle Geneser", partySize:2, plusOne:"Josh Geneser", transport:"Driving", accommodation:"", dietary:"", mailed:true},
+  {name:"Stella Chen", partySize:2, plusOne:"Kevin Lu", transport:"Flying", accommodation:"Hotel Block", dietary:"", mailed:true},
+  {name:"Sindy Tsang", partySize:2, plusOne:"Jim Yi (+ Jasper Yi)", transport:"Driving", accommodation:"", dietary:"", mailed:true},
+  {name:"Will Turnage", partySize:2, plusOne:"Katina Paron", transport:"Flying", accommodation:"Hotel Block", dietary:"No restrictions", mailed:true},
+  {name:"Michael Smith", partySize:2, plusOne:"Laura Gunder", transport:"Driving", accommodation:"", dietary:"Laura: no red meat", mailed:true},
+  {name:"Dani Lai", partySize:4, plusOne:"Gene Hahn (+ Anna Hahn, Andrew Lai)", transport:"Driving", accommodation:"", dietary:"Gene: vegan, no eggs/dairy", mailed:true},
+  {name:"Raluca Dan", partySize:2, plusOne:"Paul Iordache", transport:"Driving", accommodation:"", dietary:"", mailed:true},
+  {name:"Qian Huang", partySize:2, plusOne:"Simon Bowler", transport:"Driving", accommodation:"", dietary:"", mailed:true},
+  {name:"Hailin Wang", partySize:1, plusOne:"", transport:"Flying", accommodation:"Shared Rooms (Airbnb)", dietary:"", mailed:true},
+  {name:"Urba Mandrekar", partySize:2, plusOne:"Kathan Amin", transport:"Flying", accommodation:"Hotel Block", dietary:"Urba: no beef/pork. Kathan: no beef", mailed:true},
+  {name:"Wang", partySize:2, plusOne:"Grace", transport:"", accommodation:"", dietary:"", mailed:true},
+  {name:"Autumn", partySize:1, plusOne:"", transport:"", accommodation:"", dietary:"", mailed:true},
+  {name:"Yuke", partySize:1, plusOne:"", transport:"", accommodation:"", dietary:"", mailed:true},
+  {name:"Tianguo", partySize:2, plusOne:"Juhua", transport:"", accommodation:"", dietary:"", mailed:true},
+  {name:"Tianjun", partySize:2, plusOne:"", transport:"", accommodation:"", dietary:"", mailed:true},
+  {name:"Aihua", partySize:1, plusOne:"", transport:"", accommodation:"", dietary:"", mailed:true},
+  {name:"Yueqing Wang", partySize:1, plusOne:"", transport:"Flying", accommodation:"Shared Rooms / Hotel Block", dietary:"", mailed:true},
+  {name:"Yachu Feng", partySize:2, plusOne:"Hongbo Lu", transport:"Driving", accommodation:"", dietary:"", mailed:true},
+  {name:"Adamous Leu", partySize:1, plusOne:"", transport:"", accommodation:"", dietary:"", mailed:true},
+  {name:"Mulian", partySize:1, plusOne:"", transport:"", accommodation:"", dietary:"", mailed:true},
+  {name:"Zhihan Liu", partySize:2, plusOne:"Jing Zhang", transport:"Flying", accommodation:"Hotel Block", dietary:"", mailed:true},
+  {name:"Yuran Liu", partySize:1, plusOne:"", transport:"Driving", accommodation:"", dietary:"No restrictions", mailed:true},
+  {name:"Ran Kuang", partySize:2, plusOne:"Han Song", transport:"Driving", accommodation:"", dietary:"", mailed:true},
+  {name:"Yi", partySize:2, plusOne:"Eric Wang", transport:"", accommodation:"", dietary:"", mailed:true},
+  {name:"Siyuan Ma", partySize:2, plusOne:"Andi Zhong", transport:"", accommodation:"", dietary:"", mailed:true},
+  {name:"Jinjia Huang", partySize:2, plusOne:"Yenan Lin", transport:"", accommodation:"", dietary:"", mailed:true},
+  {name:"Quinny Chen", partySize:1, plusOne:"", transport:"Driving", accommodation:"", dietary:"", mailed:true},
+  {name:"Amanda", partySize:2, plusOne:"Jason", transport:"", accommodation:"", dietary:"", mailed:true},
+  {name:"Edward Liu", partySize:3, plusOne:"Rebecca and Flower", transport:"", accommodation:"", dietary:"", mailed:false},
+  {name:"Stefan", partySize:2, plusOne:"Michelle", transport:"", accommodation:"", dietary:"", mailed:false},
+];
+let guests = [];
+
+let guestSearch = "";
+function renderGuests() {
+  const p = document.getElementById("panel-guests");
+  const totalPeople = guests.reduce((s,g) => s + (Number(g.partySize)||0), 0);
+  const drivingCount = guests.filter(g => g.transport === "Driving").length;
+  const flyingCount = guests.filter(g => g.transport === "Flying").length;
+  const totalKids = guests.reduce((s,g) => s + (Number(g.kids)||0), 0);
+  let html = `<div class="stat-row">
+    <div class="stat"><div class="num">${guests.length}</div><div class="lbl">Households</div></div>
+    <div class="stat"><div class="num">${totalPeople}</div><div class="lbl">Total guests</div></div>
+    <div class="stat" style="background:#FBE9EF; border:1px solid #F3C8D6;"><div class="num" style="color:#C23568;">${totalKids}</div><div class="lbl">Kids</div></div>
+    <div class="stat"><div class="num">${drivingCount}</div><div class="lbl">Driving</div></div>
+    <div class="stat"><div class="num">${flyingCount}</div><div class="lbl">Flying in</div></div>
+  </div>
+  <div class="add-form">
+    <input type="text" id="g-search" placeholder="Search guests" value="${guestSearch}" style="flex:1; min-width:150px;" />
+  </div>
+  <div class="add-form">
+    <input type="text" id="g-name" placeholder="Household or guest name" style="flex:2; min-width:140px;" />
+    <input type="number" id="g-party" placeholder="Party size" min="1" style="flex:0 0 90px;" />
+    <button class="primary" id="g-add">Add household</button>
+  </div>
+  <div class="card" id="g-list"></div>`;
+  p.innerHTML = html;
+
+  const q = guestSearch.trim().toLowerCase();
+  const visible = q ? guests.filter(g =>
+    g.name.toLowerCase().includes(q) || (g.plusOne || "").toLowerCase().includes(q)
+  ) : guests;
+
+  const list = document.getElementById("g-list");
+  if (visible.length === 0) {
+    list.innerHTML = `<p class="muted">${guests.length === 0 ? "No households yet. Add one above." : "No guests match your search."}</p>`;
+  } else {
+    list.innerHTML = visible.map(g => `
+      <div class="guest-row">
+        <span style="font-weight:600;">${g.name}</span>
+        <span class="muted" data-id="${g.id}" data-action="edit-partysize" style="cursor:pointer; border-bottom:1px dashed transparent;" title="Click to edit">${g.partySize}</span>
+        <select data-id="${g.id}" data-field="transport">
+          <option value="" ${!g.transport?"selected":""}>—</option>
+          <option value="Driving" ${g.transport==="Driving"?"selected":""}>Driving</option>
+          <option value="Flying" ${g.transport==="Flying"?"selected":""}>Flying</option>
+        </select>
+        ${Number(g.kids) > 0
+          ? `<span data-id="${g.id}" data-action="edit-kids" style="cursor:pointer; background:#FBE9EF; color:#C23568; border-radius:12px; padding:3px 9px; font-size:12px; font-weight:600; justify-self:start;" title="Click to edit">${g.kids} kid${g.kids > 1 ? "s" : ""}</span>`
+          : `<button class="icon-btn" data-id="${g.id}" data-action="add-kids">+ Kids</button>`}
+        ${g.dietary ? `<span class="muted" data-id="${g.id}" data-action="edit-dietary" style="cursor:pointer; border-bottom:1px dashed transparent;" title="Click to edit">${g.dietary}</span>`
+                     : `<button class="icon-btn" data-id="${g.id}" data-action="add-dietary">+ Dietary note</button>`}
+        <button class="icon-btn" data-id="${g.id}" data-action="remove" aria-label="Remove household">${TRASH_ICON}</button>
+        ${g.plusOne ? `<div class="muted" style="grid-column: 1 / -1; display:flex; align-items:center; gap:6px;">
+          <span data-id="${g.id}" data-action="edit-plusone" style="cursor:pointer;" title="Click to edit">With: ${g.plusOne}</span>
+          <button data-id="${g.id}" data-action="remove-plusone" aria-label="Remove plus one" style="border:none; background:none; padding:0; color:var(--ink-soft); cursor:pointer; font-size:14px; line-height:1;">×</button>
+        </div>` : ""}
+      </div>`).join("");
+  }
+
+  document.getElementById("g-search").addEventListener("input", (e) => {
+    guestSearch = e.target.value;
+    renderGuests();
+    document.getElementById("g-search").focus();
+  });
+
+  document.getElementById("g-add").addEventListener("click", async () => {
+    const name = document.getElementById("g-name").value.trim();
+    const party = Number(document.getElementById("g-party").value) || 1;
+    if (!name) return;
+    guests.push({id:uid(), name, partySize:party, plusOne:"", dietary:"", transport:"", accommodation:"", kids:0});
+    await saveKey("wedding-guests", guests);
+    renderGuests();
+  });
+
+  list.querySelectorAll("[data-field]").forEach(el => {
+    el.addEventListener("change", async (e) => {
+      const g = guests.find(x => x.id === e.currentTarget.dataset.id);
+      if (!g) return;
+      g[e.target.dataset.field] = e.target.value;
+      await saveKey("wedding-guests", guests);
+      renderGuests();
+    });
+  });
+  list.querySelectorAll("[data-action=remove]").forEach(btn => {
+    btn.addEventListener("click", async (e) => {
+      guests = guests.filter(g => g.id !== e.currentTarget.dataset.id);
+      await saveKey("wedding-guests", guests);
+      renderGuests();
+    });
+  });
+  list.querySelectorAll("[data-action=add-dietary], [data-action=edit-dietary]").forEach(el => {
+    el.addEventListener("click", (e) => {
+      const g = guests.find(x => x.id === e.currentTarget.dataset.id);
+      if (!g) return;
+      openInputModal("Dietary notes", g.dietary || "", async (value) => {
+        g.dietary = value.trim();
+        await saveKey("wedding-guests", guests);
+        renderGuests();
+      });
+    });
+  });
+  list.querySelectorAll("[data-action=add-kids], [data-action=edit-kids]").forEach(el => {
+    el.addEventListener("click", (e) => {
+      const g = guests.find(x => x.id === e.currentTarget.dataset.id);
+      if (!g) return;
+      openInputModal("Number of kids in this party", g.kids || 0, async (raw) => {
+        g.kids = Math.max(0, Number(raw) || 0);
+        await saveKey("wedding-guests", guests);
+        renderGuests();
+      }, "number");
+    });
+  });
+  list.querySelectorAll("[data-action=edit-plusone]").forEach(el => {
+    el.addEventListener("click", (e) => {
+      const g = guests.find(x => x.id === e.currentTarget.dataset.id);
+      if (!g) return;
+      openInputModal("Plus one(s)", g.plusOne || "", async (value) => {
+        g.plusOne = value.trim();
+        await saveKey("wedding-guests", guests);
+        renderGuests();
+      });
+    });
+  });
+  list.querySelectorAll("[data-action=remove-plusone]").forEach(el => {
+    el.addEventListener("click", async (e) => {
+      const g = guests.find(x => x.id === e.currentTarget.dataset.id);
+      if (!g) return;
+      g.plusOne = "";
+      await saveKey("wedding-guests", guests);
+      renderGuests();
+    });
+  });
+  list.querySelectorAll("[data-action=edit-partysize]").forEach(el => {
+    el.addEventListener("click", (e) => {
+      const g = guests.find(x => x.id === e.currentTarget.dataset.id);
+      if (!g) return;
+      openInputModal("Party size", g.partySize || 1, async (raw) => {
+        g.partySize = Math.max(1, Number(raw) || 1);
+        await saveKey("wedding-guests", guests);
+        renderGuests();
+      }, "number");
+    });
+  });
+}
+
+let activities = [];
+function renderActivities() {
+  const p = document.getElementById("panel-activities");
+  let html = `<div class="add-form">
+    <input type="text" id="a-name" placeholder="Activity" style="flex:2; min-width:130px;" />
+    <input type="text" id="a-owner" placeholder="Owner" style="flex:1; min-width:100px;" />
+    <input type="date" id="a-due" style="flex:0 0 140px;" />
+    <button class="primary" id="a-add">Add activity</button>
+  </div>
+  <div class="card" id="a-list"></div>`;
+  p.innerHTML = html;
+  const list = document.getElementById("a-list");
+  if (activities.length === 0) {
+    list.innerHTML = '<p class="muted">No activities yet. Add one above.</p>';
+  } else {
+    list.innerHTML = activities.map(a => `
+      <div class="item-row">
+        <span style="flex:2; min-width:120px; font-weight:600;">${a.name}</span>
+        <span class="muted" style="flex:1; min-width:90px;">${a.owner || "Unassigned"}</span>
+        <span class="muted" style="flex:0 0 100px;">${a.due || "No date"}</span>
+        <select data-id="${a.id}" data-field="status" style="flex:0 0 130px;">
+          <option value="not-started" ${a.status==="not-started"?"selected":""}>Not started</option>
+          <option value="in-progress" ${a.status==="in-progress"?"selected":""}>In progress</option>
+          <option value="done" ${a.status==="done"?"selected":""}>Done</option>
+        </select>
+        <button class="icon-btn" data-id="${a.id}" data-action="remove" aria-label="Remove activity">${TRASH_ICON}</button>
+      </div>`).join("");
+  }
+  document.getElementById("a-add").addEventListener("click", async () => {
+    const name = document.getElementById("a-name").value.trim();
+    const owner = document.getElementById("a-owner").value.trim();
+    const due = document.getElementById("a-due").value;
+    if (!name) return;
+    activities.push({id:uid(), name, owner, due, status:"not-started"});
+    await saveKey("wedding-activities", activities);
+    renderActivities();
+  });
+  list.querySelectorAll("[data-field]").forEach(el => {
+    el.addEventListener("change", async (e) => {
+      const a = activities.find(x => x.id === e.currentTarget.dataset.id);
+      if (!a) return;
+      a[e.target.dataset.field] = e.target.value;
+      await saveKey("wedding-activities", activities);
+      renderActivities();
+    });
+  });
+  list.querySelectorAll("[data-action=remove]").forEach(btn => {
+    btn.addEventListener("click", async (e) => {
+      activities = activities.filter(a => a.id !== e.currentTarget.dataset.id);
+      await saveKey("wedding-activities", activities);
+      renderActivities();
+    });
+  });
+}
+
+const TIMELINE_SEED = [{"time": "7:00 am", "event": "Wake up & light breakfast", "duration": "", "desc": "Bride & wedding party fuels up before the long day.", "section": "Morning Preparation", "order": 0}, {"time": "8:15 am", "event": "Return to getting-ready suite", "duration": "", "desc": "Travel back; bridal party hair & makeup begins; groom & groomsmen start getting ready.", "section": "Morning Preparation", "order": 1}, {"time": "8:15 am", "event": "Mom 1 makeup", "duration": "1 hr", "desc": "Mom 1's makeup session. (8:15 am to 9:15 am)", "section": "Morning Preparation", "order": 2}, {"time": "9:00 am", "event": "Tea ceremony", "duration": "~20 min", "desc": "Traditional tea serving with family elders, a moment of gratitude before celebrations begin.", "section": "Morning Preparation", "order": 3}, {"time": "9:15 am", "event": "Mom 2 makeup", "duration": "1 hr", "desc": "Mom 2's makeup session. (9:15 am to 10:15 am)", "section": "Morning Preparation", "order": 4}, {"time": "9:30 am", "event": "Bride's makeup begins", "duration": "3 hr", "desc": "Foundation, eyes, lips, setting. (9:30 am to 12:30 pm)", "section": "Morning Preparation", "order": 5}, {"time": "11:30 am", "event": "Bridal party lunch break", "duration": "", "desc": "Light lunch delivered to getting-ready suite, avoid anything heavy or staining.", "section": "Morning Preparation", "order": 6}, {"time": "12:00 pm", "event": "Groom fully ready", "duration": "", "desc": "Groom & groomsmen portraits with photographer.", "section": "Morning Preparation", "order": 7}, {"time": "12:30 pm", "event": "Ceremony rehearsal", "duration": "~45 min", "desc": "Full wedding party at ceremony venue, processional order, positions, cues, vow exchange run-through, recessional.", "section": "Morning Preparation", "order": 8}, {"time": "12:30 pm", "event": "Makeup complete, into the gown", "duration": "", "desc": "Dress assist with bridesmaids; veil, accessories, and shoes.", "section": "Morning Preparation", "order": 9}, {"time": "1:00 pm", "event": "Bride fully ready, detail photos", "duration": "", "desc": "Bouquet, rings, shoes, dress details; getting-ready shots with bridal party.", "section": "Morning Preparation", "order": 10}, {"time": "1:45 pm", "event": "Holding room, final touch-ups", "duration": "", "desc": "Calm moment before the first look; officiant & wedding party in position.", "section": "Morning Preparation", "order": 11}, {"time": "2:00 pm", "event": "First look", "duration": "~15 min", "desc": "Bride & groom see each other for the first time, private reveal before guests arrive.", "section": "Pre-Ceremony", "order": 12}, {"time": "2:15 pm", "event": "Couple portraits", "duration": "~30 min", "desc": "Golden light window, romantic couple shots at portrait locations.", "section": "Pre-Ceremony", "order": 13}, {"time": "2:45 pm", "event": "Bridal party portraits", "duration": "~15 min", "desc": "Bridesmaids, groomsmen, full bridal party lineup shots.", "section": "Pre-Ceremony", "order": 14}, {"time": "3:00 pm", "event": "Guest check-in begins", "duration": "", "desc": "Welcome table open; escort cards, programs, welcome bags distributed.", "section": "Pre-Ceremony", "order": 15}, {"time": "3:10 pm", "event": "Fun activities open", "duration": "", "desc": "Design your own bag, DIY scented crystal stones, and more.", "section": "Pre-Ceremony", "order": 16}, {"time": "3:45 pm", "event": "Couple to holding room", "duration": "", "desc": "Final touch-ups, calm moment; officiant & wedding party in position.", "section": "Pre-Ceremony", "order": 17}, {"time": "4:00 pm", "event": "Ceremony begins", "duration": "~25-30 min", "desc": "Processional, vows, ring exchange, pronouncement & kiss.", "section": "Ceremony", "order": 18}, {"time": "4:30 pm", "event": "Group photos", "duration": "~25 min", "desc": "Family formals first (immediate family, grandparents, extended), then full guest group shot.", "section": "Ceremony", "order": 19}, {"time": "5:00 pm", "event": "Cocktail hour begins", "duration": "", "desc": "Guests move to cocktail space; passed appetizers & drinks; lounge music.", "section": "Cocktail Hour", "order": 20}, {"time": "5:30 pm", "event": "Couple joins cocktail hour briefly", "duration": "", "desc": "Mingle with guests, grab a bite; candid photos.", "section": "Cocktail Hour", "order": 21}, {"time": "5:45 pm", "event": "Guests invited to take their seats", "duration": "", "desc": "MC or venue staff directs guests into the reception room.", "section": "Cocktail Hour", "order": 22}, {"time": "6:00 pm", "event": "Grand entrance", "duration": "", "desc": "Bridal party introduced one by one; couple enters last to hype music.", "section": "Reception", "order": 23}, {"time": "6:10 pm", "event": "Dinner service begins", "duration": "", "desc": "First course served; ambient background music during dining.", "section": "Reception", "order": 24}, {"time": "7:00 pm", "event": "Welcome speech & blessing", "duration": "~15 min", "desc": "Host or family elder opens with a blessing; couple's welcome toast.", "section": "Reception", "order": 25}, {"time": "7:20 pm", "event": "Toasts from family & friends", "duration": "", "desc": "Best man, maid of honor, and any additional speakers (~2-3 total).", "section": "Reception", "order": 26}, {"time": "7:30 pm", "event": "First dance", "duration": "~10 min", "desc": "Couple's first dance; parent dances to follow.", "section": "Evening Highlights", "order": 27}, {"time": "7:45 pm", "event": "Dance floor opens", "duration": "", "desc": "DJ or band kicks off; dessert stations may open early for late arrivals.", "section": "Evening Highlights", "order": 28}, {"time": "8:30 pm", "event": "Cake cutting & dessert", "duration": "", "desc": "Couple cuts the cake together; dessert station fully opens for all guests.", "section": "Evening Highlights", "order": 29}, {"time": "9:00 pm", "event": "Party time", "duration": "", "desc": "Full dance floor, glow sticks, games, high energy. Let the night unfold!", "section": "Evening Highlights", "order": 30}, {"time": "10:30 pm", "event": "Last song & farewell", "duration": "", "desc": "Final dance announced; guests line up for send-off.", "section": "Evening Highlights", "order": 31}, {"time": "11:00 pm", "event": "Reception ends, send-off", "duration": "", "desc": "Couple's grand exit (sparklers, ribbon wands, or confetti).", "section": "Evening Highlights", "order": 32}];
+let timeline = [];
+function buildTimeOptions() {
+  const opts = [];
+  for (let h = 0; h < 24; h++) {
+    for (let m = 0; m < 60; m += 5) {
+      const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+      const ap = h < 12 ? "am" : "pm";
+      opts.push(`${h12}:${String(m).padStart(2,"0")} ${ap}`);
+    }
+  }
+  return opts;
+}
+const TIME_OPTIONS = buildTimeOptions();
+function timeToMinutes(t) {
+  const m = (t || "").match(/(\d+):(\d+)\s*(am|pm)/i);
+  if (!m) return 0;
+  let [, h, min, ap] = m;
+  h = parseInt(h); min = parseInt(min);
+  if (ap.toLowerCase() === "am") { if (h === 12) h = 0; }
+  else { if (h !== 12) h += 12; }
+  return h * 60 + min;
+}
+function timeSelectOptions(sel) {
+  return TIME_OPTIONS.map(t => `<option value="${t}" ${t===sel?"selected":""}>${t}</option>`).join("");
+}
+
+let tlDragId = null;
+let tlJumpId = null;
+let timelineSections = [];
+const TIMELINE_SECTION_DEFAULTS = ["Morning Preparation","Pre-Ceremony","Ceremony","Cocktail Hour","Reception","Evening Highlights"];
+
+function renderTimeline() {
+  const p = document.getElementById("panel-timeline");
+  const sectionOptions = timelineSections.map(s => `<option value="${s.name}">${s.name}</option>`).join("");
+  let html = `<div class="row" style="margin-bottom:12px;">
+    <button id="t-add-section">+ Add section</button>
+  </div>
+  <div class="add-form">
+    <input type="text" id="t-time" placeholder="Time (e.g. 2:00 pm)" style="flex:0 0 130px;" />
+    <input type="text" id="t-event" placeholder="Event" style="flex:2; min-width:140px;" />
+    <select id="t-section" style="flex:0 0 160px;">
+      <option value="">No section</option>
+      ${sectionOptions}
+    </select>
+    <button class="primary" id="t-add">Add moment</button>
+  </div>`;
+
+  const sorted = [...timeline].sort((a,b) => (a.order||0) - (b.order||0));
+  const knownNames = timelineSections.map(s => s.name);
+
+  function cardHtml(t) {
+    return `<div class="card tl-card" draggable="true" data-tl-id="${t.id}" style="padding:12px 16px; margin-bottom:8px;">
+        <div class="item-row" style="border:none; padding:0;">
+          <span class="tl-handle" data-drag-handle title="Drag to reorder">⠿</span>
+          <select data-id="${t.id}" data-action="edit-time" style="flex:0 0 100px; font-weight:600; color:var(--primary); background:var(--primary-light); border:none; padding:5px 6px;">
+            ${timeSelectOptions(t.time)}
+          </select>
+          <span data-id="${t.id}" data-action="edit-event" style="flex:2; min-width:150px; cursor:pointer; border-bottom:1px dashed transparent;" title="Click to edit">${t.event}</span>
+          <span class="muted" data-id="${t.id}" data-action="edit-duration" style="flex:0 0 90px; cursor:pointer; border-bottom:1px dashed transparent;" title="Click to edit">${t.duration || "+ Duration"}</span>
+          <button class="icon-btn tl-fade" data-id="${t.id}" data-action="remove" aria-label="Remove timeline entry">${TRASH_ICON}</button>
+        </div>
+        <div class="muted" data-id="${t.id}" data-action="edit-desc" style="font-size:13px; margin-top:6px; cursor:pointer; ${t.desc ? "" : "font-style:italic;"}" title="Click to edit">${t.desc || "+ Add description"}</div>
+      </div>`;
+  }
+
+  if (timelineSections.length === 0 && sorted.length === 0) {
+    html += '<div class="card"><p class="muted">No timeline entries yet. Add a section or a moment above.</p></div>';
+  } else {
+    timelineSections.forEach(sec => {
+      const items = sorted.filter(t => (t.section || "") === sec.name);
+      html += `<div class="row" style="justify-content:space-between; margin:18px 0 8px; align-items:center;">
+        <span class="section-label">${sec.name}</span>
+        <button class="icon-btn tl-section-remove" data-section-id="${sec.id}" aria-label="Remove section" style="padding:2px 6px;">${TRASH_ICON}</button>
+      </div>
+      <div class="tl-zone" data-section-name="${sec.name}">
+        ${items.length ? items.map(cardHtml).join("") : '<p class="muted" style="padding:6px 0 2px; font-size:13px;">No items yet. Drag a card here, or add one above.</p>'}
+      </div>`;
+    });
+    const orphan = sorted.filter(t => !knownNames.includes(t.section || ""));
+    if (orphan.length) {
+      html += `<div class="row" style="margin:18px 0 8px;"><span class="section-label" style="background:var(--surface-1); color:var(--ink-soft);">Unsectioned</span></div>
+      <div class="tl-zone" data-section-name="">${orphan.map(cardHtml).join("")}</div>`;
+    }
+  }
+
+  html += `<div class="row" style="margin-top:8px;"><button id="t-clear" class="icon-btn" style="color:var(--ink-soft); border-color:var(--border);">Reset to default timeline</button></div>`;
+
+  p.innerHTML = html;
+
+  document.getElementById("t-add-section").addEventListener("click", () => {
+    openInputModal("Section name", "", (name) => {
+      const trimmed = name.trim();
+      if (!trimmed) return;
+      timelineSections.push({id: uid(), name: trimmed});
+      renderTimeline();
+      saveKey("wedding-timeline-sections", timelineSections);
+    });
+  });
+  p.querySelectorAll(".tl-section-remove").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      const secId = e.currentTarget.dataset.sectionId;
+      const sec = timelineSections.find(s => s.id === secId);
+      if (!sec) return;
+      timeline.forEach(t => { if (t.section === sec.name) t.section = ""; });
+      timelineSections = timelineSections.filter(s => s.id !== secId);
+      renderTimeline();
+      saveKey("wedding-timeline-sections", timelineSections);
+      saveKey("wedding-timeline", timeline);
+    });
+  });
+  document.getElementById("t-add").addEventListener("click", () => {
+    const time = document.getElementById("t-time").value.trim();
+    const event = document.getElementById("t-event").value.trim();
+    const section = document.getElementById("t-section").value;
+    if (!event) return;
+    timeline.push({id:uid(), time, event, duration:"", desc:"", section, order: timeline.length});
+    renderTimeline();
+    saveKey("wedding-timeline", timeline);
+  });
+  p.querySelectorAll("[data-action=remove]").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      timeline = timeline.filter(t => t.id !== e.currentTarget.dataset.id);
+      renderTimeline();
+      saveKey("wedding-timeline", timeline);
+    });
+  });
+  p.querySelectorAll("[data-action=edit-duration]").forEach(el => {
+    el.addEventListener("click", (e) => {
+      const t = timeline.find(x => x.id === e.currentTarget.dataset.id);
+      if (!t) return;
+      openInputModal("Duration", t.duration || "", (value) => {
+        t.duration = value.trim();
+        renderTimeline();
+        saveKey("wedding-timeline", timeline);
+      });
+    });
+  });
+  p.querySelectorAll("select[data-action=edit-time]").forEach(sel => {
+    sel.addEventListener("change", (e) => {
+      const id = e.currentTarget.dataset.id;
+      const t = timeline.find(x => x.id === id);
+      if (!t) return;
+      t.time = e.currentTarget.value;
+      const section = t.section || "";
+      const order = [...timeline].sort((a,b) => (a.order||0) - (b.order||0));
+      const positions = [];
+      order.forEach((item, i) => { if ((item.section || "") === section) positions.push(i); });
+      const group = positions.map(i => order[i]).sort((a,b) => timeToMinutes(a.time) - timeToMinutes(b.time));
+      positions.forEach((slot, i) => { order[slot] = group[i]; });
+      order.forEach((item, i) => { item.order = i; });
+      tlJumpId = t.id;
+      renderTimeline();
+      saveKey("wedding-timeline", timeline);
+    });
+  });
+  p.querySelectorAll("[data-action=edit-event]").forEach(el => {
+    el.addEventListener("click", (e) => {
+      const t = timeline.find(x => x.id === e.currentTarget.dataset.id);
+      if (!t) return;
+      openInputModal("Event", t.event || "", (value) => {
+        const trimmed = value.trim();
+        if (!trimmed) return;
+        t.event = trimmed;
+        renderTimeline();
+        saveKey("wedding-timeline", timeline);
+      });
+    });
+  });
+  p.querySelectorAll("[data-action=edit-desc]").forEach(el => {
+    el.addEventListener("click", (e) => {
+      const t = timeline.find(x => x.id === e.currentTarget.dataset.id);
+      if (!t) return;
+      openInputModal("Description", t.desc || "", (value) => {
+        t.desc = value.trim();
+        renderTimeline();
+        saveKey("wedding-timeline", timeline);
+      });
+    });
+  });
+  document.getElementById("t-clear").addEventListener("click", () => {
+    timeline = TIMELINE_SEED.map(s => ({id: uid(), ...s}));
+    timelineSections = TIMELINE_SECTION_DEFAULTS.map(name => ({id: uid(), name}));
+    renderTimeline();
+    saveKey("wedding-timeline", timeline);
+    saveKey("wedding-timeline-sections", timelineSections);
+  });
+
+  bindTlDrag(p);
+  bindTlZoneDrop(p);
+
+  if (tlJumpId !== null) {
+    const el = p.querySelector(`[data-tl-id="${tlJumpId}"]`);
+    if (el) {
+      el.classList.add("jumped");
+      el.scrollIntoView({behavior:"smooth", block:"nearest"});
+      el.addEventListener("animationend", () => el.classList.remove("jumped"), {once:true});
+    }
+    tlJumpId = null;
+  }
+}
+
+function bindTlZoneDrop(p) {
+  p.querySelectorAll(".tl-zone").forEach(zone => {
+    zone.addEventListener("dragover", (e) => { if (tlDragId) e.preventDefault(); });
+    zone.addEventListener("drop", (e) => {
+      if (!tlDragId) return;
+      if (e.target.closest(".tl-card")) return;
+      e.preventDefault();
+      const t = timeline.find(x => x.id === tlDragId);
+      if (!t) return;
+      t.section = zone.dataset.sectionName || "";
+      const order = [...timeline].sort((a,b) => (a.order||0) - (b.order||0));
+      const idx = order.findIndex(x => x.id === tlDragId);
+      if (idx !== -1) {
+        const [moved] = order.splice(idx, 1);
+        order.push(moved);
+        order.forEach((item, i) => { item.order = i; });
+      }
+      tlJumpId = tlDragId;
+      renderTimeline();
+      saveKey("wedding-timeline", timeline);
+    });
+  });
+}
+
+function bindTlDrag(p) {
+  p.querySelectorAll(".tl-card").forEach(card => {
+    card.addEventListener("dragstart", (e) => {
+      if (["INPUT","SELECT","TEXTAREA","BUTTON"].includes(e.target.tagName)) {
+        e.preventDefault();
+        return;
+      }
+      tlDragId = card.dataset.tlId;
+      card.classList.add("dragging");
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", "");
+    });
+    card.addEventListener("dragend", () => {
+      card.classList.remove("dragging");
+      p.querySelectorAll(".tl-card").forEach(c => c.classList.remove("drag-over-top","drag-over-bottom"));
+      tlDragId = null;
+    });
+    card.addEventListener("dragover", (e) => {
+      if (!tlDragId) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      const rect = card.getBoundingClientRect();
+      const mid = rect.top + rect.height / 2;
+      card.classList.remove("drag-over-top","drag-over-bottom");
+      card.classList.add(e.clientY < mid ? "drag-over-top" : "drag-over-bottom");
+    });
+    card.addEventListener("dragleave", () => {
+      card.classList.remove("drag-over-top","drag-over-bottom");
+    });
+    card.addEventListener("drop", (e) => {
+      if (!tlDragId) return;
+      e.preventDefault();
+      e.stopPropagation();
+      card.classList.remove("drag-over-top","drag-over-bottom");
+      if (tlDragId === card.dataset.tlId) return;
+      const rect = card.getBoundingClientRect();
+      const after = e.clientY >= rect.top + rect.height / 2;
+      performTlMove(tlDragId, card.dataset.tlId, after);
+    });
+  });
+}
+
+function performTlMove(draggedId, targetId, after) {
+  const order = [...timeline].sort((a,b) => (a.order||0) - (b.order||0));
+  const fromIdx = order.findIndex(t => t.id === draggedId);
+  if (fromIdx === -1) return;
+  const [moved] = order.splice(fromIdx, 1);
+  let targetIdx = order.findIndex(t => t.id === targetId);
+  if (targetIdx === -1) targetIdx = order.length;
+  let insertAt = after ? targetIdx + 1 : targetIdx;
+  insertAt = Math.max(0, Math.min(insertAt, order.length));
+  const targetItem = order[after ? insertAt - 1 : insertAt] || order[order.length - 1];
+  if (targetItem) moved.section = targetItem.section || "";
+  order.splice(insertAt, 0, moved);
+  order.forEach((item, i) => { item.order = i; });
+  tlJumpId = moved.id;
+  renderTimeline();
+  saveKey("wedding-timeline", timeline);
+}
+
+let dressItems = [];
+const DRESS_STATUSES = ["Not started","Ordered","Fitting scheduled","Alterations in progress","Ready for pickup","Picked up"];
+function renderDress() {
+  const p = document.getElementById("panel-dress");
+  let html = `<div class="add-form">
+    <input type="text" id="d-person" placeholder="Person (e.g. Bride)" style="flex:1; min-width:100px;" />
+    <input type="text" id="d-item" placeholder="Item (e.g. Dress, veil)" style="flex:1; min-width:120px;" />
+    <button class="primary" id="d-add">Add item</button>
+  </div>
+  <div class="card" id="d-list"></div>`;
+  p.innerHTML = html;
+  const list = document.getElementById("d-list");
+  if (dressItems.length === 0) {
+    list.innerHTML = '<p class="muted">No attire items yet. Add one above.</p>';
+  } else {
+    list.innerHTML = dressItems.map(d => `
+      <div class="item-row">
+        <span style="flex:1; min-width:90px; font-weight:600;">${d.person}</span>
+        <span style="flex:1; min-width:100px;">${d.item}</span>
+        <select data-id="${d.id}" data-field="status" style="flex:0 0 170px;">
+          ${DRESS_STATUSES.map(s => `<option value="${s}" ${d.status===s?"selected":""}>${s}</option>`).join("")}
+        </select>
+        <input type="date" data-id="${d.id}" data-field="date" value="${d.date||""}" style="flex:0 0 140px;" />
+        <button class="icon-btn" data-id="${d.id}" data-action="remove" aria-label="Remove item">${TRASH_ICON}</button>
+        <input type="text" data-id="${d.id}" data-field="notes" placeholder="Notes" value="${d.notes||""}" style="flex:1; min-width:150px; width:100%;" />
+      </div>`).join("");
+  }
+  document.getElementById("d-add").addEventListener("click", async () => {
+    const person = document.getElementById("d-person").value.trim();
+    const item = document.getElementById("d-item").value.trim();
+    if (!person || !item) return;
+    dressItems.push({id:uid(), person, item, status:"Not started", date:"", notes:""});
+    await saveKey("wedding-dress", dressItems);
+    renderDress();
+  });
+  list.querySelectorAll("[data-field]").forEach(el => {
+    el.addEventListener("change", async (e) => {
+      const d = dressItems.find(x => x.id === e.currentTarget.dataset.id);
+      if (!d) return;
+      d[e.target.dataset.field] = e.target.value;
+      await saveKey("wedding-dress", dressItems);
+      renderDress();
+    });
+  });
+  list.querySelectorAll("[data-action=remove]").forEach(btn => {
+    btn.addEventListener("click", async (e) => {
+      dressItems = dressItems.filter(d => d.id !== e.currentTarget.dataset.id);
+      await saveKey("wedding-dress", dressItems);
+      renderDress();
+    });
+  });
+}
+
+let budget = { total: 0, expenses: [] };
+function budgetSpent() {
+  return budget.expenses.reduce((s, e) => s + (Number(e.amount) || 0), 0);
+}
+function fmtMoney(n) {
+  return "$" + Number(n || 0).toLocaleString(undefined, {maximumFractionDigits: 0});
+}
+function renderBudget() {
+  const p = document.getElementById("panel-budget");
+  const spent = budgetSpent();
+  const remaining = (Number(budget.total) || 0) - spent;
+  const pct = budget.total ? Math.min(100, Math.round(spent / budget.total * 100)) : 0;
+  let html = `
+  <div class="card">
+    <div class="row" style="justify-content:space-between; margin-bottom:10px;">
+      <span class="section-title" style="margin:0;">Total budget</span>
+      <input type="number" id="b-total" value="${budget.total || ""}" placeholder="0" style="width:130px; text-align:right;" />
+    </div>
+    <div class="progress-bar" style="margin-bottom:8px;"><div class="progress-fill" style="width:${pct}%; ${remaining < 0 ? "background:#D9455F;" : ""}"></div></div>
+    <div class="row" style="justify-content:space-between;">
+      <span class="muted">${fmtMoney(spent)} spent</span>
+      <span class="muted">${remaining < 0 ? fmtMoney(Math.abs(remaining)) + " over" : fmtMoney(remaining) + " remaining"}</span>
+    </div>
+  </div>
+  <div class="add-form">
+    <input type="text" id="e-name" placeholder="Expense (e.g. Venue deposit)" style="flex:2; min-width:140px;" />
+    <input type="text" id="e-category" placeholder="Category" style="flex:1; min-width:100px;" />
+    <input type="number" id="e-amount" placeholder="Amount" style="flex:0 0 100px;" />
+    <button class="primary" id="e-add">Add expense</button>
+  </div>
+  <div class="card" id="e-list"></div>`;
+  p.innerHTML = html;
+
+  const list = document.getElementById("e-list");
+  if (budget.expenses.length === 0) {
+    list.innerHTML = '<p class="muted">No expenses logged yet. Add one above.</p>';
+  } else {
+    list.innerHTML = budget.expenses.map(e => `
+      <div class="item-row">
+        <span style="flex:2; min-width:120px; font-weight:600;">${e.name}</span>
+        <span class="muted" style="flex:1; min-width:90px;">${e.category || "Uncategorized"}</span>
+        <span style="flex:0 0 90px; font-weight:600;">${fmtMoney(e.amount)}</span>
+        <button class="icon-btn" data-id="${e.id}" data-action="remove" aria-label="Remove expense">${TRASH_ICON}</button>
+      </div>`).join("");
+  }
+
+  document.getElementById("b-total").addEventListener("change", async (e) => {
+    budget.total = Number(e.target.value) || 0;
+    await saveKey("wedding-budget", budget);
+    renderBudget();
+  });
+  document.getElementById("e-add").addEventListener("click", async () => {
+    const name = document.getElementById("e-name").value.trim();
+    const category = document.getElementById("e-category").value.trim();
+    const amount = Number(document.getElementById("e-amount").value) || 0;
+    if (!name) return;
+    budget.expenses.push({id: uid(), name, category, amount});
+    await saveKey("wedding-budget", budget);
+    renderBudget();
+  });
+  list.querySelectorAll("[data-action=remove]").forEach(btn => {
+    btn.addEventListener("click", async (e) => {
+      budget.expenses = budget.expenses.filter(x => x.id !== e.currentTarget.dataset.id);
+      await saveKey("wedding-budget", budget);
+      renderBudget();
+    });
+  });
+}
+
+let shopList = [];
+let shopSearch = "";
+let shopListEditingId = null;
+let shopStoreFilter = "";
+const STORE_DEFAULTS = ["Costco","Woodmen","Global","Weee","Amazon"];
+
+function renderShopList() {
+  const p = document.getElementById("panel-shoplist");
+  const storeOptionsHtml = ["<option value=\"\">All stores</option>"]
+    .concat(storeOptions.map(s => `<option value="${s.name}" ${shopStoreFilter===s.name?"selected":""}>${s.name}</option>`))
+    .join("");
+
+  let html = `
+  <div class="row" style="justify-content:space-between; margin-bottom:14px;">
+    <button id="back-to-todo-btn" style="display:inline-flex; align-items:center; gap:6px;">&larr; Back to To-do</button>
+  </div>
+
+  <div class="card">
+    <p class="section-title" style="margin:0 0 8px;">Stores</p>
+    <div class="row" style="flex-wrap:wrap; gap:6px; margin-bottom:10px;">
+      ${storeOptions.length === 0 ? '<span class="muted">No stores yet. Add one below.</span>' : storeOptions.map(s => `
+        <span style="display:inline-flex; align-items:center; gap:6px; background:var(--primary-light); color:var(--primary); border-radius:14px; padding:4px 10px; font-size:13px; font-weight:500;">
+          ${s.name}
+          <button data-remove-store="${s.id}" aria-label="Remove ${s.name}" style="border:none; background:none; padding:0; color:var(--ink-soft); cursor:pointer; font-size:14px; line-height:1;">×</button>
+        </span>`).join("")}
+    </div>
+    <button id="add-store-btn">+ Add store</button>
+  </div>
+
+  <div class="add-form">
+    <input type="text" id="sl-search" placeholder="Search items" value="${shopSearch}" style="flex:1; min-width:140px;" />
+    <select id="sl-store-filter" style="flex:0 0 150px;">${storeOptionsHtml}</select>
+  </div>
+
+  <div class="add-form">
+    <input type="text" id="sl-category" placeholder="Category" style="flex:1; min-width:110px;" />
+    <input type="text" id="sl-item" placeholder="Item" style="flex:2; min-width:130px;" />
+    <input type="number" id="sl-qty" placeholder="Qty" min="1" style="flex:0 0 80px;" />
+    <select id="sl-store" style="flex:0 0 140px;">
+      <option value="">No store</option>
+      ${storeOptions.map(s => `<option value="${s.name}">${s.name}</option>`).join("")}
+    </select>
+    <button class="primary" id="sl-add">+ Add item</button>
+  </div>`;
+
+  const q = shopSearch.trim().toLowerCase();
+  let rows = shopList.filter(r => {
+    const matchesSearch = q ? (r.item || "").toLowerCase().includes(q) : true;
+    const matchesStore = shopStoreFilter ? r.store === shopStoreFilter : true;
+    return matchesSearch && matchesStore;
+  });
+
+  if (shopList.length === 0) {
+    html += `<div class="card"><p class="muted">No items yet. Add one above, or check the box in a to-do task's edit popup to send it here.</p></div>`;
+  } else if (rows.length === 0) {
+    html += `<div class="card"><p class="muted">No items match your search or filter.</p></div>`;
+  } else {
+    const categories = [];
+    rows.forEach(r => { const c = r.category || "Uncategorized"; if (!categories.includes(c)) categories.push(c); });
+    categories.forEach(cat => {
+      const items = rows.filter(r => (r.category || "Uncategorized") === cat);
+      html += `<div class="row" style="margin:18px 0 8px;"><span class="section-label">${cat}</span></div>`;
+      html += `<div class="table-wrap"><table class="data-table">
+        <thead><tr><th>Item Name</th><th>Quantity</th><th>Store</th><th></th></tr></thead>
+        <tbody>`;
+      items.forEach(row => {
+        if (shopListEditingId === row.id) {
+          const storeOpts = ["<option value=\"\">No store</option>"]
+            .concat(storeOptions.map(s => `<option value="${s.name}" ${row.store===s.name?"selected":""}>${s.name}</option>`))
+            .join("");
+          html += `<tr>
+            <td colspan="4" style="padding:10px;">
+              <div class="row" style="gap:8px; margin-bottom:8px;">
+                <input type="text" data-slrow-field="item" data-slrow-id="${row.id}" value="${row.item || ""}" placeholder="Item name" style="flex:2; min-width:100px;" />
+                <input type="number" min="1" data-slrow-field="qtyNeeded" data-slrow-id="${row.id}" value="${row.qtyNeeded || 1}" style="flex:0 0 70px;" />
+                <select data-slrow-field="store" data-slrow-id="${row.id}" style="flex:0 0 140px;">${storeOpts}</select>
+                <input type="text" data-slrow-field="category" data-slrow-id="${row.id}" value="${row.category || ""}" placeholder="Category" style="flex:0 0 120px;" />
+              </div>
+              <div class="row" style="gap:8px;">
+                <input type="text" data-slrow-field="notes" data-slrow-id="${row.id}" value="${row.notes || ""}" placeholder="Note" style="flex:1;" />
+                <button data-slrow-done="${row.id}">Done</button>
+                <button class="icon-btn" data-slrow-remove="${row.id}" aria-label="Remove item">${TRASH_ICON}</button>
+              </div>
+            </td>
+          </tr>`;
+        } else {
+          html += `<tr>
+            <td><span class="shop-item-name" data-slrow-open="${row.id}">${row.item || ""}</span></td>
+            <td>${row.qtyNeeded || 1}</td>
+            <td>${row.store || "\u2014"}</td>
+            <td><button class="icon-btn" data-slrow-remove="${row.id}" aria-label="Remove item">${TRASH_ICON}</button></td>
+          </tr>`;
+        }
+      });
+      html += `</tbody></table></div>`;
+    });
+  }
+
+  p.innerHTML = html;
+
+  document.getElementById("back-to-todo-btn").addEventListener("click", () => goToTab("todo"));
+
+  document.getElementById("add-store-btn").addEventListener("click", () => {
+    openInputModal("Store name", "", (name) => {
+      const trimmed = name.trim();
+      if (!trimmed) return;
+      storeOptions.push({id: uid(), name: trimmed});
+      renderShopList();
+      saveKey("wedding-store-options", storeOptions);
+    });
+  });
+  p.querySelectorAll("[data-remove-store]").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      const storeId = e.currentTarget.dataset.removeStore;
+      storeOptions = storeOptions.filter(s => s.id !== storeId);
+      renderShopList();
+      saveKey("wedding-store-options", storeOptions);
+    });
+  });
+
+  document.getElementById("sl-search").addEventListener("input", (e) => {
+    shopSearch = e.target.value;
+    renderShopList();
+    document.getElementById("sl-search").focus();
+  });
+  document.getElementById("sl-store-filter").addEventListener("change", (e) => {
+    shopStoreFilter = e.target.value;
+    renderShopList();
+  });
+
+  document.getElementById("sl-add").addEventListener("click", () => {
+    const category = document.getElementById("sl-category").value.trim();
+    const item = document.getElementById("sl-item").value.trim();
+    const qty = document.getElementById("sl-qty").value || 1;
+    const store = document.getElementById("sl-store").value;
+    if (!item) return;
+    shopList.push({id: uid(), category, item, qtyNeeded: qty, store, notes: ""});
+    renderShopList();
+    saveKey("wedding-shop-list", shopList);
+  });
+  p.querySelectorAll("[data-slrow-open]").forEach(el => {
+    el.addEventListener("click", (e) => {
+      shopListEditingId = e.currentTarget.dataset.slrowOpen;
+      renderShopList();
+    });
+  });
+  p.querySelectorAll("[data-slrow-done]").forEach(el => {
+    el.addEventListener("click", () => {
+      shopListEditingId = null;
+      renderShopList();
+    });
+  });
+  p.querySelectorAll("[data-slrow-field]").forEach(el => {
+    el.addEventListener("change", (e) => {
+      const row = shopList.find(r => r.id === e.currentTarget.dataset.slrowId);
+      if (!row) return;
+      row[e.currentTarget.dataset.slrowField] = e.currentTarget.value;
+      saveKey("wedding-shop-list", shopList);
+      renderShopList();
+    });
+  });
+  p.querySelectorAll("[data-slrow-remove]").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      const id = e.currentTarget.dataset.slrowRemove;
+      shopList = shopList.filter(r => r.id !== id);
+      todoData.forEach(s => s.items.forEach(item => {
+        if (item.shopItemId === id) item.shopItemId = "";
+        if (item.shopItemIds) item.shopItemIds = item.shopItemIds.filter(x => x !== id);
+      }));
+      shopListEditingId = null;
+      renderShopList();
+      renderTodo();
+      saveKey("wedding-shop-list", shopList);
+      saveKey("wedding-todo-items", todoData);
+    });
+  });
+}
+
+function renderDashboard() {
+  const p = document.getElementById("panel-dashboard");
+  const totalPeople = guests.reduce((s,g) => s + (Number(g.partySize)||0), 0);
+  const drivingCount = guests.filter(g => g.transport === "Driving").length;
+  const flyingCount = guests.filter(g => g.transport === "Flying").length;
+  const householdsWithTransport = guests.filter(g => g.transport).length;
+  const guestPct = guests.length ? Math.round(householdsWithTransport / guests.length * 100) : 0;
+
+  const spent = budgetSpent();
+  const total = Number(budget.total) || 0;
+  const pct = total ? Math.min(100, Math.round(spent / total * 100)) : 0;
+  const remaining = total - spent;
+  const budgetPct = total ? pct : 0;
+
+  let totalDone = 0, totalItems = 0;
+  const upcoming = [];
+  todoData.forEach(s => s.items.forEach(item => {
+    totalItems++;
+    if (todoState[item.id]) totalDone++;
+    else upcoming.push({...item, section: s.label});
+  }));
+  const todoPct = totalItems ? Math.round(totalDone/totalItems*100) : 0;
+
+  const overallPct = Math.round((guestPct + budgetPct + todoPct) / 3);
+
+  const dashboardShopStores = {};
+  shopList.forEach(r => { const k = r.store || ""; if (k) dashboardShopStores[k] = (dashboardShopStores[k]||0) + 1; });
+  const dashboardShopStoreSummary = Object.entries(dashboardShopStores)
+    .sort((a,b) => b[1]-a[1])
+    .slice(0, 3)
+    .map(([store, count]) => `${store} (${count})`)
+    .join(" \u00b7 ");
+
+  const today = new Date(); today.setHours(0,0,0,0);
+  const daysLeft = Math.round((WEDDING_DATE - today) / 86400000);
+  const weddingDateLabel = WEDDING_DATE.toLocaleDateString(undefined, {weekday:"long", month:"long", day:"numeric", year:"numeric"});
+
+  let html = `
+  <div class="hero-banner">
+    <div class="hero-days">${daysLeft >= 0 ? daysLeft + " days to go" : "The big day has passed \u2014 congrats!"}</div>
+    <div class="hero-sub">${weddingDateLabel}</div>
+  </div>
+
+  <div class="card">
+    <div class="row" style="justify-content:space-between; margin-bottom:8px;">
+      <p class="section-title" style="margin:0;">Overall wedding readiness</p>
+      <span style="font-weight:700; color:var(--primary); font-size:15px;">${overallPct}%</span>
+    </div>
+    <div class="progress-bar" style="height:10px; margin-bottom:14px;"><div class="progress-fill" style="width:${overallPct}%;"></div></div>
+    <div class="row" style="gap:20px; flex-wrap:wrap;">
+      <div style="flex:1; min-width:130px;">
+        <div class="row" style="justify-content:space-between; margin-bottom:4px;"><span class="muted">Guest travel set</span><span class="muted">${guestPct}%</span></div>
+        <div class="progress-bar" style="height:5px;"><div class="progress-fill" style="width:${guestPct}%;"></div></div>
+      </div>
+      <div style="flex:1; min-width:130px;">
+        <div class="row" style="justify-content:space-between; margin-bottom:4px;"><span class="muted">Budget used</span><span class="muted">${total ? budgetPct + "%" : "No budget set"}</span></div>
+        <div class="progress-bar" style="height:5px;"><div class="progress-fill" style="width:${budgetPct}%; ${remaining < 0 ? "background:#D9455F;" : ""}"></div></div>
+      </div>
+      <div style="flex:1; min-width:130px;">
+        <div class="row" style="justify-content:space-between; margin-bottom:4px;"><span class="muted">To-dos done</span><span class="muted">${todoPct}%</span></div>
+        <div class="progress-bar" style="height:5px;"><div class="progress-fill" style="width:${todoPct}%;"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="stat-row">
+    <div class="stat icon-stat">
+      <div class="icon-stat-badge">${icon("users")}</div>
+      <div>
+        <div class="num">${totalPeople}</div>
+        <div class="lbl">Total guests (${drivingCount} driving, ${flyingCount} flying)</div>
+      </div>
+    </div>
+    <div class="stat icon-stat">
+      <div class="icon-stat-badge">${icon("wallet")}</div>
+      <div>
+        <div class="num">${fmtMoney(spent)}</div>
+        <div class="lbl">${total ? "of " + fmtMoney(total) + " budget" : "spent so far"}</div>
+      </div>
+    </div>
+    <div class="stat icon-stat">
+      <div class="icon-stat-badge">${icon("check")}</div>
+      <div>
+        <div class="num">${totalDone}/${totalItems}</div>
+        <div class="lbl">To-dos done</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="row" style="justify-content:space-between; margin-bottom:8px;">
+      <p class="section-title" style="margin:0;">Budget</p>
+      <button id="goto-budget" style="border:none; background:none; padding:0; color:var(--primary); font-size:13px; font-weight:600; cursor:pointer; font-family:inherit;">View all &rarr;</button>
+    </div>
+    <div class="progress-bar" style="margin-bottom:8px;"><div class="progress-fill" style="width:${pct}%; ${remaining < 0 ? "background:#D9455F;" : ""}"></div></div>
+    <div class="row" style="justify-content:space-between;">
+      <span class="muted">${fmtMoney(spent)} spent</span>
+      <span class="muted">${total ? (remaining < 0 ? fmtMoney(Math.abs(remaining)) + " over budget" : fmtMoney(remaining) + " remaining") : "Set a total budget in the Budget tab"}</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="row" style="justify-content:space-between; margin-bottom:8px;">
+      <p class="section-title" style="margin:0;">Shop List</p>
+      <button id="goto-shoplist" style="border:none; background:none; padding:0; color:var(--primary); font-size:13px; font-weight:600; cursor:pointer; font-family:inherit;">View all &rarr;</button>
+    </div>
+    <div class="icon-stat">
+      <div class="icon-stat-badge">${icon("cart")}</div>
+      <div>
+        <div class="num">${shopList.length}</div>
+        <div class="lbl">${shopList.length === 0 ? "No items yet" : (dashboardShopStoreSummary || "Item" + (shopList.length === 1 ? "" : "s") + " to buy")}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="row" style="justify-content:space-between; margin-bottom:8px;">
+      <p class="section-title" style="margin:0;">To-do quick view</p>
+      <div class="row" style="gap:10px;">
+        <span class="muted">${todoPct}% complete</span>
+        <button id="goto-todo" style="border:none; background:none; padding:0; color:var(--primary); font-size:13px; font-weight:600; cursor:pointer; font-family:inherit;">View all &rarr;</button>
+      </div>
+    </div>
+    <div class="progress-bar" style="margin-bottom:12px;"><div class="progress-fill" style="width:${todoPct}%;"></div></div>
+    ${upcoming.length === 0 ? '<p class="muted">Everything is checked off. Nicely done.</p>' : upcoming.slice(0, 5).map(item => `
+      <div class="item-row">
+        <span style="flex:2; min-width:150px;">${item.text}</span>
+        <span class="muted" style="flex:0 0 100px;">${item.dueDate ? fmtDate(new Date(item.dueDate + "T00:00:00")) : "No deadline"}</span>
+        <span class="muted" style="flex:0 0 90px;">${item.assignee || "Unassigned"}</span>
+      </div>`).join("")}
+  </div>`;
+  p.innerHTML = html;
+  const gotoLink = document.getElementById("goto-todo");
+  if (gotoLink) {
+    gotoLink.addEventListener("click", (e) => {
+      e.preventDefault();
+      goToTab("todo");
+    });
+  }
+  const gotoBudgetLink = document.getElementById("goto-budget");
+  if (gotoBudgetLink) {
+    gotoBudgetLink.addEventListener("click", (e) => {
+      e.preventDefault();
+      goToTab("budget");
+    });
+  }
+  const gotoShoplistLink = document.getElementById("goto-shoplist");
+  if (gotoShoplistLink) {
+    gotoShoplistLink.addEventListener("click", (e) => {
+      e.preventDefault();
+      goToTab("shoplist");
+    });
+  }
+}
+
+(async function init() {
+  const savedItems = await loadKey("wedding-todo-items");
+  const savedState = (await loadKey("wedding-checklist")) || {};
+
+  if (savedItems && savedItems.length) {
+    todoData = savedItems;
+    const migrated = await loadKey("wedding-assignee-reset-done");
+    if (!migrated) {
+      todoData.forEach(s => s.items.forEach(item => { item.assignee = ""; }));
+      await saveKey("wedding-todo-items", todoData);
+      await saveKey("wedding-assignee-reset-done", true);
+    }
+    todoState = savedState;
+  } else {
+    todoData = TODO_DEFAULTS.map(s => ({
+      id: s.id,
+      label: s.label,
+      items: s.items.map((text, i) => ({id: s.id + "-" + i, text}))
+    }));
+    todoState = savedState;
+    await saveKey("wedding-todo-items", todoData);
+  }
+
+  guests = await loadKey("wedding-guests");
+  if (!guests || guests.length === 0) {
+    guests = GUEST_SEED.map(s => ({id: uid(), ...s}));
+    await saveKey("wedding-guests", guests);
+  }
+  activities = (await loadKey("wedding-activities")) || [];
+  timeline = (await loadKey("wedding-timeline")) || [];
+  if (timeline.length === 0) {
+    timeline = TIMELINE_SEED.map(s => ({id: uid(), ...s}));
+    await saveKey("wedding-timeline", timeline);
+  }
+  timelineSections = (await loadKey("wedding-timeline-sections")) || [];
+  if (timelineSections.length === 0) {
+    timelineSections = TIMELINE_SECTION_DEFAULTS.map(name => ({id: uid(), name}));
+    await saveKey("wedding-timeline-sections", timelineSections);
+  }
+  dressItems = (await loadKey("wedding-dress")) || [];
+  helperTags = (await loadKey("wedding-helper-tags")) || [];
+  budget = (await loadKey("wedding-budget")) || { total: 0, expenses: [] };
+  shopList = (await loadKey("wedding-shop-list")) || [];
+  storeOptions = (await loadKey("wedding-store-options")) || [];
+  if (storeOptions.length === 0) {
+    storeOptions = STORE_DEFAULTS.map(name => ({id: uid(), name}));
+    await saveKey("wedding-store-options", storeOptions);
+  }
+
+  renderDashboard();
+  renderTodo();
+  renderGuests();
+  renderBudget();
+  renderShopList();
+  renderActivities();
+  renderTimeline();
+  renderDress();
+})();
+</script>
+</body>
+</html>
