@@ -1006,7 +1006,6 @@ function todoRowHtml(sectionId, item, draggable) {
         </label>
         <input type="date" data-due-section="${sectionId}" data-due-item="${item.id}" value="${item.dueDate || ""}" style="flex:0 0 145px;" />
         <select data-assign-section="${sectionId}" data-assign-item="${item.id}" style="flex:0 0 150px;">${options}</select>
-        <button class="icon-btn" data-shop-toggle-section="${sectionId}" data-shop-toggle-item="${item.id}" aria-label="${linked ? "On shop list" : "Add to shop list"}" title="${linked ? "On shop list \u2014 click to edit" : "Add to shop list"}" style="${linked ? "background:var(--primary-light); color:var(--primary); border-color:transparent;" : ""}">${icon("cart", 15)}</button>
         <button class="icon-btn" data-remove-section="${sectionId}" data-remove-item="${item.id}" aria-label="Remove task">${TRASH_ICON}</button>
       </div>`;
 }
@@ -1030,7 +1029,6 @@ function renderTodo() {
   <div class="row" style="gap:14px; align-items:stretch; margin-bottom:16px; flex-wrap:wrap;">
     <button id="goto-shoplist-btn" style="flex:1; min-width:220px; text-align:left; border:none; cursor:pointer; padding:0; font-family:inherit;">
       <div class="hero-banner" style="height:100%; padding:18px 20px; display:flex; flex-direction:column; justify-content:center; gap:10px; box-sizing:border-box;">
-        <div style="width:40px; height:40px; border-radius:10px; background:rgba(255,255,255,0.18); display:flex; align-items:center; justify-content:center; color:#fff; position:relative; z-index:1;">${icon("cart", 20)}</div>
         <div style="position:relative; z-index:1;">
           <div style="font-size:16px; font-weight:700; color:#fff;">Shop List &rarr;</div>
           <div style="font-size:13px; color:rgba(255,255,255,0.85); margin-top:2px;">
@@ -1180,13 +1178,6 @@ function renderTodo() {
       item.dueDate = e.target.value;
       renderTodo();
       saveKey("wedding-todo-items", todoData);
-    });
-  });
-  p.querySelectorAll("[data-shop-toggle-item]").forEach(btn => {
-    btn.addEventListener("click", (e) => {
-      const sectionId = e.currentTarget.dataset.shopToggleSection;
-      const itemId = e.currentTarget.dataset.shopToggleItem;
-      openTaskEditModal(sectionId, itemId, true);
     });
   });
   p.querySelectorAll("[data-remove-item]").forEach(btn => {
