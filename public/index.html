@@ -422,9 +422,10 @@
 
 <div class="modal-overlay" id="tags-modal">
   <div class="modal-box" style="max-width:340px;">
-    <h3 style="margin:0 0 14px;">Manage tags</h3>
+    <h3 id="tags-modal-title" style="margin:0 0 14px;">Manage tags</h3>
     <div id="tags-modal-list" style="margin-bottom:14px;"></div>
     <div class="modal-actions">
+      <button id="tags-modal-add">+ Add</button>
       <button id="tags-modal-close">Close</button>
     </div>
   </div>
@@ -546,34 +547,94 @@ document.getElementById("input-modal-field").addEventListener("keydown", (e) => 
   if (e.key === "Enter") document.getElementById("input-modal-save").click();
 });
 
-function openTagsModal() {
+let tagsModalMode = "helpers";
+function openTagsModal(mode) {
+  tagsModalMode = mode === "stores" ? "stores" : "helpers";
+  document.getElementById("tags-modal-title").textContent =
+    tagsModalMode === "stores" ? "Manage stores" : "Manage tags";
   renderTagsModalList();
   document.getElementById("tags-modal").classList.add("open");
 }
 function closeTagsModal() {
   document.getElementById("tags-modal").classList.remove("open");
 }
+function tagsModalItems() {
+  return tagsModalMode === "stores" ? storeOptions : helperTags;
+}
+async function persistTagsModal() {
+  if (tagsModalMode === "stores") {
+    await saveKey("wedding-store-options", storeOptions);
+    await saveKey("wedding-shop-list", shopList);
+    renderShopList();
+    renderDashboard();
+  } else {
+    await saveKey("wedding-helper-tags", helperTags);
+    await saveKey("wedding-todo-items", todoData);
+    renderTodo();
+  }
+}
+function renameTagReferences(oldName, newName) {
+  if (tagsModalMode === "stores") {
+    shopList.forEach(r => { if (r.store === oldName) r.store = newName; });
+  } else {
+    todoData.forEach(s => s.items.forEach(i => { if (i.assignee === oldName) i.assignee = newName; }));
+  }
+}
+function clearTagReferences(name) {
+  if (tagsModalMode === "stores") {
+    shopList.forEach(r => { if (r.store === name) r.store = ""; });
+  } else {
+    todoData.forEach(s => s.items.forEach(i => { if (i.assignee === name) i.assignee = ""; }));
+  }
+}
 function renderTagsModalList() {
   const list = document.getElementById("tags-modal-list");
-  if (helperTags.length === 0) {
-    list.innerHTML = '<p class="muted">No tags yet.</p>';
+  const items = tagsModalItems();
+  if (items.length === 0) {
+    list.innerHTML = `<p class="muted">${tagsModalMode === "stores" ? "No stores yet." : "No tags yet."}</p>`;
     return;
   }
-  list.innerHTML = helperTags.map(t => `
+  list.innerHTML = items.map(t => `
     <div class="item-row">
-      <span style="flex:1;">${t.name}</span>
-      <button class="icon-btn" data-remove-tag-modal="${t.id}" aria-label="Remove ${t.name}">${TRASH_ICON}</button>
+      <input type="text" autocomplete="off" data-lpignore="true" data-1p-ignore data-form-type="other"
+        data-rename-tag="${t.id}" value="${esc(t.name)}" style="flex:1; min-width:120px;" />
+      <button class="icon-btn" data-remove-tag-modal="${t.id}" aria-label="Remove ${esc(t.name)}" title="Remove">${TRASH_ICON}</button>
     </div>`).join("");
-  list.querySelectorAll("[data-remove-tag-modal]").forEach(btn => {
-    btn.addEventListener("click", (e) => {
-      const tagId = e.currentTarget.dataset.removeTagModal;
-      helperTags = helperTags.filter(t => t.id !== tagId);
+  list.querySelectorAll("[data-rename-tag]").forEach(inp => {
+    inp.addEventListener("change", async (e) => {
+      const entry = tagsModalItems().find(t => t.id === e.currentTarget.dataset.renameTag);
+      if (!entry) return;
+      const next = e.currentTarget.value.trim();
+      if (!next || next === entry.name) { e.currentTarget.value = entry.name; return; }
+      renameTagReferences(entry.name, next);
+      entry.name = next;
       renderTagsModalList();
-      renderTodo();
-      saveKey("wedding-helper-tags", helperTags);
+      await persistTagsModal();
+    });
+  });
+  list.querySelectorAll("[data-remove-tag-modal]").forEach(btn => {
+    btn.addEventListener("click", async (e) => {
+      const id = e.currentTarget.dataset.removeTagModal;
+      const entry = tagsModalItems().find(t => t.id === id);
+      if (entry) clearTagReferences(entry.name);
+      if (tagsModalMode === "stores") storeOptions = storeOptions.filter(t => t.id !== id);
+      else helperTags = helperTags.filter(t => t.id !== id);
+      renderTagsModalList();
+      await persistTagsModal();
     });
   });
 }
+document.getElementById("tags-modal-add").addEventListener("click", () => {
+  const label = tagsModalMode === "stores" ? "Store name" : "Helper name";
+  openInputModal(label, "", (name) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    if (tagsModalMode === "stores") storeOptions.push({id: uid(), name: trimmed});
+    else helperTags.push({id: uid(), name: trimmed});
+    renderTagsModalList();
+    persistTagsModal();
+  });
+});
 document.getElementById("tags-modal-close").addEventListener("click", closeTagsModal);
 document.getElementById("tags-modal").addEventListener("click", (e) => {
   if (e.target.id === "tags-modal") closeTagsModal();
@@ -590,11 +651,35 @@ function fillAssigneeSelect(selectEl, currentValue) {
   selectEl.value = currentValue || "";
 }
 let storeOptions = [];
-function fillStoreSelect(selectEl, currentValue) {
-  const options = ["<option value=\"\">No store</option>"]
-    .concat(storeOptions.map(s => `<option value="${s.name}">${s.name}</option>`))
+function storeSelectOptionsHtml(currentValue) {
+  return ["<option value=\"\">No store</option>"]
+    .concat(storeOptions.map(s => `<option value="${esc(s.name)}" ${s.name === currentValue ? "selected" : ""}>${esc(s.name)}</option>`))
+    .concat(["<option value=\"__add_new__\">+ Add new…</option>", "<option value=\"__manage__\">✎ Manage stores…</option>"])
     .join("");
-  selectEl.innerHTML = options;
+}
+// Handles the "+ Add new…" / "Manage stores…" entries on any store <select>.
+// Returns true when the change was one of those actions (caller should stop).
+function handleStoreSelectAction(selectEl, previousValue, onPicked) {
+  if (selectEl.value === "__add_new__") {
+    selectEl.value = previousValue || "";
+    openInputModal("Store name", "", (name) => {
+      const trimmed = name.trim();
+      if (!trimmed) return;
+      storeOptions.push({id: uid(), name: trimmed});
+      saveKey("wedding-store-options", storeOptions);
+      if (onPicked) onPicked(trimmed);
+    });
+    return true;
+  }
+  if (selectEl.value === "__manage__") {
+    selectEl.value = previousValue || "";
+    openTagsModal("stores");
+    return true;
+  }
+  return false;
+}
+function fillStoreSelect(selectEl, currentValue) {
+  selectEl.innerHTML = storeSelectOptionsHtml(currentValue);
   selectEl.value = currentValue || "";
 }
 document.getElementById("task-modal-shop-toggle").addEventListener("change", (e) => {
@@ -663,9 +748,7 @@ function renderShopItemsTable() {
   }
   wrap.innerHTML = rows.map(row => {
     if (shopItemEditingId === row.id) {
-      const storeOpts = ["<option value=\"\">No store</option>"]
-        .concat(storeOptions.map(s => `<option value="${s.name}" ${row.store===s.name?"selected":""}>${s.name}</option>`))
-        .join("");
+      const storeOpts = storeSelectOptionsHtml(row.store);
       return `<div class="shop-item-row" style="flex-direction:column; align-items:stretch; gap:6px;">
         <div class="row" style="gap:8px;">
           <input type="text" data-shop-edit-field="item" data-shop-edit-id="${row.id}" value="${row.item || ""}" placeholder="Item name" style="flex:2; min-width:100px;" />
@@ -709,6 +792,12 @@ function renderShopItemsTable() {
       const field = e.currentTarget.dataset.shopEditField;
       const row = shopList.find(r => r.id === id);
       if (!row) return;
+      if (field === "store" && handleStoreSelectAction(e.currentTarget, row.store, (created) => {
+        row.store = created;
+        saveKey("wedding-shop-list", shopList);
+        renderShopItemsTable();
+        renderShopList();
+      })) return;
       row[field] = e.currentTarget.value;
       saveKey("wedding-shop-list", shopList);
       renderShopList();
@@ -775,6 +864,11 @@ function renderShopAddRow() {
   const qtyInput = document.getElementById("task-modal-shop-new-qty");
   const storeSelect = document.getElementById("task-modal-shop-new-store");
   const notesInput = document.getElementById("task-modal-shop-new-notes");
+  storeSelect.addEventListener("change", (e) => {
+    handleStoreSelectAction(e.currentTarget, "", (created) => {
+      fillStoreSelect(e.currentTarget, created);
+    });
+  });
   input.focus();
   function trySave() {
     if (!input.value.trim()) { input.focus(); return; }
@@ -2066,18 +2160,6 @@ function renderShopList() {
     <button id="back-to-todo-btn" style="display:inline-flex; align-items:center; gap:6px;">&larr; Back to To-do</button>
   </div>
 
-  <div class="card">
-    <p class="section-title" style="margin:0 0 8px;">Stores</p>
-    <div class="row" style="flex-wrap:wrap; gap:6px; margin-bottom:10px;">
-      ${storeOptions.length === 0 ? '<span class="muted">No stores yet. Add one below.</span>' : storeOptions.map(s => `
-        <span style="display:inline-flex; align-items:center; gap:6px; background:var(--primary-light); color:var(--primary); border-radius:14px; padding:4px 10px; font-size:13px; font-weight:500;">
-          ${s.name}
-          <button data-remove-store="${s.id}" aria-label="Remove ${s.name}" style="border:none; background:none; padding:0; color:var(--ink-soft); cursor:pointer; font-size:14px; line-height:1;">×</button>
-        </span>`).join("")}
-    </div>
-    <button id="add-store-btn">+ Add store</button>
-  </div>
-
   <div class="add-form">
     <input type="text" id="sl-search" placeholder="Search items" value="${shopSearch}" style="flex:1; min-width:140px;" />
     <select id="sl-store-filter" style="flex:0 0 150px;">${storeOptionsHtml}</select>
@@ -2087,10 +2169,7 @@ function renderShopList() {
     <input type="text" id="sl-category" placeholder="Category" style="flex:1; min-width:110px;" />
     <input type="text" id="sl-item" placeholder="Item" style="flex:2; min-width:130px;" />
     <input type="number" id="sl-qty" placeholder="Qty" min="1" style="flex:0 0 80px;" />
-    <select id="sl-store" style="flex:0 0 140px;">
-      <option value="">No store</option>
-      ${storeOptions.map(s => `<option value="${s.name}">${s.name}</option>`).join("")}
-    </select>
+    <select id="sl-store" style="flex:0 0 140px;">${storeSelectOptionsHtml("")}</select>
     <button class="primary" id="sl-add">+ Add item</button>
   </div>`;
 
@@ -2116,9 +2195,7 @@ function renderShopList() {
         <tbody>`;
       items.forEach(row => {
         if (shopListEditingId === row.id) {
-          const storeOpts = ["<option value=\"\">No store</option>"]
-            .concat(storeOptions.map(s => `<option value="${s.name}" ${row.store===s.name?"selected":""}>${s.name}</option>`))
-            .join("");
+          const storeOpts = storeSelectOptionsHtml(row.store);
           html += `<tr>
             <td colspan="5" style="padding:10px;">
               <div class="row" style="gap:8px; margin-bottom:8px;">
@@ -2152,21 +2229,11 @@ function renderShopList() {
 
   document.getElementById("back-to-todo-btn").addEventListener("click", () => goToTab("todo"));
 
-  document.getElementById("add-store-btn").addEventListener("click", () => {
-    openInputModal("Store name", "", (name) => {
-      const trimmed = name.trim();
-      if (!trimmed) return;
-      storeOptions.push({id: uid(), name: trimmed});
+  document.getElementById("sl-store").addEventListener("change", (e) => {
+    handleStoreSelectAction(e.currentTarget, "", (created) => {
       renderShopList();
-      saveKey("wedding-store-options", storeOptions);
-    });
-  });
-  p.querySelectorAll("[data-remove-store]").forEach(btn => {
-    btn.addEventListener("click", (e) => {
-      const storeId = e.currentTarget.dataset.removeStore;
-      storeOptions = storeOptions.filter(s => s.id !== storeId);
-      renderShopList();
-      saveKey("wedding-store-options", storeOptions);
+      const sel = document.getElementById("sl-store");
+      if (sel) sel.value = created;
     });
   });
 
@@ -2218,7 +2285,13 @@ function renderShopList() {
     el.addEventListener("change", (e) => {
       const row = shopList.find(r => r.id === e.currentTarget.dataset.slrowId);
       if (!row) return;
-      row[e.currentTarget.dataset.slrowField] = e.currentTarget.value;
+      const field = e.currentTarget.dataset.slrowField;
+      if (field === "store" && handleStoreSelectAction(e.currentTarget, row.store, (created) => {
+        row.store = created;
+        saveKey("wedding-shop-list", shopList);
+        renderShopList();
+      })) return;
+      row[field] = e.currentTarget.value;
       saveKey("wedding-shop-list", shopList);
       renderShopList();
     });
