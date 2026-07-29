@@ -48,7 +48,11 @@
     flex-wrap: wrap;
   }
   .tab {
-    padding: 9px 16px;
+    flex: 1 1 0;
+    min-width: 0;
+    text-align: center;
+    white-space: nowrap;
+    padding: 9px 12px;
     font-size: 13.5px;
     font-weight: 500;
     color: var(--ink-soft);
@@ -81,6 +85,22 @@
   .stat .lbl { font-size: 12px; color: var(--ink-soft); margin-top: 1px; }
   .progress-bar { height: 8px; border-radius: 5px; background: var(--primary-light); overflow: hidden; }
   .progress-fill { height: 100%; background: var(--primary); border-radius: 5px; transition: width 0.3s; }
+  .dash-duo { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 640px) { .dash-duo { grid-template-columns: 1fr; } }
+  .ring-wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 6px 0 2px; }
+  .ring { position: relative; width: 132px; height: 132px; flex: 0 0 auto; }
+  .ring svg { width: 100%; height: 100%; transform: rotate(-90deg); display: block; }
+  .ring .ring-track { stroke: var(--primary-light); }
+  .ring .ring-fill { stroke-linecap: round; transition: stroke-dashoffset 0.45s ease; }
+  .ring-center {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; text-align: center; gap: 1px;
+  }
+  .ring-center .ring-pct { font-size: 24px; font-weight: 700; letter-spacing: -0.5px; line-height: 1.05; }
+  .ring-center .ring-sub { font-size: 11px; color: var(--ink-soft); }
+  .ring-legend { text-align: center; }
+  .ring-legend .ring-main { font-size: 15px; font-weight: 600; }
+  .ring-legend .ring-note { font-size: 12.5px; color: var(--ink-soft); margin-top: 2px; }
   input[type=text], input[type=number], input[type=date], select {
     border: 1px solid var(--border);
     border-radius: 8px;
@@ -366,7 +386,6 @@
     <div class="tab" data-tab="budget">Budget</div>
     <div class="tab" data-tab="activities">Activity table</div>
     <div class="tab" data-tab="timeline">Timeline</div>
-    <div class="tab" data-tab="dress">Dress</div>
   </div>
 
   <div id="panel-dashboard" class="panel active"></div>
@@ -376,7 +395,6 @@
   <div id="panel-budget" class="panel"></div>
   <div id="panel-activities" class="panel"></div>
   <div id="panel-timeline" class="panel"></div>
-  <div id="panel-dress" class="panel"></div>
 </div>
 
 <div class="modal-overlay" id="tags-modal">
@@ -1782,59 +1800,6 @@ function performTlMove(draggedId, targetId, after) {
   saveKey("wedding-timeline", timeline);
 }
 
-let dressItems = [];
-const DRESS_STATUSES = ["Not started","Ordered","Fitting scheduled","Alterations in progress","Ready for pickup","Picked up"];
-function renderDress() {
-  const p = document.getElementById("panel-dress");
-  let html = `<div class="add-form">
-    <input type="text" id="d-person" placeholder="Person (e.g. Bride)" style="flex:1; min-width:100px;" />
-    <input type="text" id="d-item" placeholder="Item (e.g. Dress, veil)" style="flex:1; min-width:120px;" />
-    <button class="primary" id="d-add">Add item</button>
-  </div>
-  <div class="card" id="d-list"></div>`;
-  p.innerHTML = html;
-  const list = document.getElementById("d-list");
-  if (dressItems.length === 0) {
-    list.innerHTML = '<p class="muted">No attire items yet. Add one above.</p>';
-  } else {
-    list.innerHTML = dressItems.map(d => `
-      <div class="item-row">
-        <span style="flex:1; min-width:90px; font-weight:600;">${d.person}</span>
-        <span style="flex:1; min-width:100px;">${d.item}</span>
-        <select data-id="${d.id}" data-field="status" style="flex:0 0 170px;">
-          ${DRESS_STATUSES.map(s => `<option value="${s}" ${d.status===s?"selected":""}>${s}</option>`).join("")}
-        </select>
-        <input type="date" data-id="${d.id}" data-field="date" value="${d.date||""}" style="flex:0 0 140px;" />
-        <button class="icon-btn" data-id="${d.id}" data-action="remove" aria-label="Remove item">${TRASH_ICON}</button>
-        <input type="text" data-id="${d.id}" data-field="notes" placeholder="Notes" value="${d.notes||""}" style="flex:1; min-width:150px; width:100%;" />
-      </div>`).join("");
-  }
-  document.getElementById("d-add").addEventListener("click", async () => {
-    const person = document.getElementById("d-person").value.trim();
-    const item = document.getElementById("d-item").value.trim();
-    if (!person || !item) return;
-    dressItems.push({id:uid(), person, item, status:"Not started", date:"", notes:""});
-    await saveKey("wedding-dress", dressItems);
-    renderDress();
-  });
-  list.querySelectorAll("[data-field]").forEach(el => {
-    el.addEventListener("change", async (e) => {
-      const d = dressItems.find(x => x.id === e.currentTarget.dataset.id);
-      if (!d) return;
-      d[e.target.dataset.field] = e.target.value;
-      await saveKey("wedding-dress", dressItems);
-      renderDress();
-    });
-  });
-  list.querySelectorAll("[data-action=remove]").forEach(btn => {
-    btn.addEventListener("click", async (e) => {
-      dressItems = dressItems.filter(d => d.id !== e.currentTarget.dataset.id);
-      await saveKey("wedding-dress", dressItems);
-      renderDress();
-    });
-  });
-}
-
 const BUDGET_SEED = [
   {category:"Venue", vendor:"The Barn", contact:"Jason", phone:"(773) 456-5450", owner:"Yanyan", contract:"Yes", paid:"Yes", amount:9000, next:""},
   {category:"Tent & Furniture", vendor:"Event Essentials", contact:"Julie Chamberlin", phone:"Julie@eventessentials.com", owner:"Yanyan", contract:"Yes", paid:"Yes", amount:4000, next:"Meet onsite; Get map"},
@@ -1866,6 +1831,23 @@ function budgetSpent() {
 }
 function fmtMoney(n) {
   return "$" + Number(n || 0).toLocaleString(undefined, {maximumFractionDigits: 0});
+}
+function progressRing({pct, centerText, centerSub, color, title}) {
+  const r = 54, c = 2 * Math.PI * r;
+  const shown = Math.max(0, Math.min(100, Number(pct) || 0));
+  const offset = c - (shown / 100) * c;
+  const stroke = color || "var(--primary)";
+  return `<div class="ring" role="img" aria-label="${esc(title || "")} ${Math.round(shown)}%">
+    <svg viewBox="0 0 128 128">
+      <circle class="ring-track" cx="64" cy="64" r="${r}" fill="none" stroke-width="12"></circle>
+      <circle class="ring-fill" cx="64" cy="64" r="${r}" fill="none" stroke-width="12"
+        stroke="${stroke}" stroke-dasharray="${c.toFixed(1)}" stroke-dashoffset="${offset.toFixed(1)}"></circle>
+    </svg>
+    <div class="ring-center">
+      <span class="ring-pct" style="color:${stroke};">${centerText}</span>
+      ${centerSub ? `<span class="ring-sub">${centerSub}</span>` : ""}
+    </div>
+  </div>`;
 }
 function renderBudget() {
   const p = document.getElementById("panel-budget");
@@ -2020,7 +2002,7 @@ function renderShopList() {
       const items = rows.filter(r => (r.category || "Uncategorized") === cat);
       html += `<div class="row" style="margin:18px 0 8px;"><span class="section-label">${cat}</span></div>`;
       html += `<div class="table-wrap"><table class="data-table">
-        <thead><tr><th>Item Name</th><th>Quantity</th><th>Store</th><th></th></tr></thead>
+        <thead><tr><th style="width:46px;">Got</th><th>Item Name</th><th>Quantity</th><th>Store</th><th></th></tr></thead>
         <tbody>`;
       items.forEach(row => {
         if (shopListEditingId === row.id) {
@@ -2028,7 +2010,7 @@ function renderShopList() {
             .concat(storeOptions.map(s => `<option value="${s.name}" ${row.store===s.name?"selected":""}>${s.name}</option>`))
             .join("");
           html += `<tr>
-            <td colspan="4" style="padding:10px;">
+            <td colspan="5" style="padding:10px;">
               <div class="row" style="gap:8px; margin-bottom:8px;">
                 <input type="text" data-slrow-field="item" data-slrow-id="${row.id}" value="${row.item || ""}" placeholder="Item name" style="flex:2; min-width:100px;" />
                 <input type="number" min="1" data-slrow-field="qtyNeeded" data-slrow-id="${row.id}" value="${row.qtyNeeded || 1}" style="flex:0 0 70px;" />
@@ -2044,7 +2026,8 @@ function renderShopList() {
           </tr>`;
         } else {
           html += `<tr>
-            <td><span class="shop-item-name" data-slrow-open="${row.id}">${row.item || ""}</span></td>
+            <td><input type="checkbox" data-slrow-bought="${row.id}" ${row.bought ? "checked" : ""} aria-label="Bought ${esc(row.item || "item")}" /></td>
+            <td><span class="shop-item-name ${row.bought ? "strike" : ""}" data-slrow-open="${row.id}">${row.item || ""}</span></td>
             <td>${row.qtyNeeded || 1}</td>
             <td>${row.store || "\u2014"}</td>
             <td><button class="icon-btn" data-slrow-remove="${row.id}" aria-label="Remove item">${TRASH_ICON}</button></td>
@@ -2109,6 +2092,15 @@ function renderShopList() {
       renderShopList();
     });
   });
+  p.querySelectorAll("[data-slrow-bought]").forEach(el => {
+    el.addEventListener("change", async (e) => {
+      const row = shopList.find(r => r.id === e.currentTarget.dataset.slrowBought);
+      if (!row) return;
+      row.bought = e.currentTarget.checked;
+      await saveKey("wedding-shop-list", shopList);
+      renderShopList();
+    });
+  });
   p.querySelectorAll("[data-slrow-field]").forEach(el => {
     el.addEventListener("change", (e) => {
       const row = shopList.find(r => r.id === e.currentTarget.dataset.slrowId);
@@ -2144,6 +2136,9 @@ function renderDashboard() {
   const guestPct = guests.length ? Math.round(householdsWithTransport / guests.length * 100) : 0;
 
   const spent = budgetSpent();
+  const shopTotal = shopList.length;
+  const shopBought = shopList.filter(r => r.bought).length;
+  const shopPct = shopTotal ? Math.round(shopBought / shopTotal * 100) : 0;
   const total = Number(budget.total) || 0;
   const pct = total ? Math.min(100, Math.round(spent / total * 100)) : 0;
   const remaining = total - spent;
@@ -2224,28 +2219,43 @@ function renderDashboard() {
     </div>
   </div>
 
-  <div class="card">
-    <div class="row" style="justify-content:space-between; margin-bottom:8px;">
-      <p class="section-title" style="margin:0;">Budget</p>
-      <button id="goto-budget" style="border:none; background:none; padding:0; color:var(--primary); font-size:13px; font-weight:600; cursor:pointer; font-family:inherit;">View all &rarr;</button>
+  <div class="dash-duo">
+    <div class="card">
+      <div class="row" style="justify-content:space-between; margin-bottom:8px;">
+        <p class="section-title" style="margin:0;">Budget</p>
+        <button id="goto-budget" style="border:none; background:none; padding:0; color:var(--primary); font-size:13px; font-weight:600; cursor:pointer; font-family:inherit;">View all &rarr;</button>
+      </div>
+      <div class="ring-wrap">
+        ${progressRing({
+          pct: total ? pct : 0,
+          centerText: total ? pct + "%" : "—",
+          centerSub: total ? "of budget" : "no budget",
+          color: remaining < 0 ? "#D9455F" : "var(--primary)",
+          title: "Budget used"
+        })}
+        <div class="ring-legend">
+          <div class="ring-main">${fmtMoney(spent)} spent</div>
+          <div class="ring-note">${total ? (remaining < 0 ? fmtMoney(Math.abs(remaining)) + " over budget" : fmtMoney(remaining) + " remaining") : "Set a total budget in the Budget tab"}</div>
+        </div>
+      </div>
     </div>
-    <div class="progress-bar" style="margin-bottom:8px;"><div class="progress-fill" style="width:${pct}%; ${remaining < 0 ? "background:#D9455F;" : ""}"></div></div>
-    <div class="row" style="justify-content:space-between;">
-      <span class="muted">${fmtMoney(spent)} spent</span>
-      <span class="muted">${total ? (remaining < 0 ? fmtMoney(Math.abs(remaining)) + " over budget" : fmtMoney(remaining) + " remaining") : "Set a total budget in the Budget tab"}</span>
-    </div>
-  </div>
 
-  <div class="card">
-    <div class="row" style="justify-content:space-between; margin-bottom:8px;">
-      <p class="section-title" style="margin:0;">Shop List</p>
-      <button id="goto-shoplist" style="border:none; background:none; padding:0; color:var(--primary); font-size:13px; font-weight:600; cursor:pointer; font-family:inherit;">View all &rarr;</button>
-    </div>
-    <div class="icon-stat">
-      <div class="icon-stat-badge">${icon("cart")}</div>
-      <div>
-        <div class="num">${shopList.length}</div>
-        <div class="lbl">${shopList.length === 0 ? "No items yet" : (dashboardShopStoreSummary || "Item" + (shopList.length === 1 ? "" : "s") + " to buy")}</div>
+    <div class="card">
+      <div class="row" style="justify-content:space-between; margin-bottom:8px;">
+        <p class="section-title" style="margin:0;">Shop List</p>
+        <button id="goto-shoplist" style="border:none; background:none; padding:0; color:var(--primary); font-size:13px; font-weight:600; cursor:pointer; font-family:inherit;">View all &rarr;</button>
+      </div>
+      <div class="ring-wrap">
+        ${progressRing({
+          pct: shopPct,
+          centerText: shopTotal ? shopPct + "%" : "—",
+          centerSub: shopTotal ? shopBought + " of " + shopTotal : "no items",
+          title: "Shop list bought"
+        })}
+        <div class="ring-legend">
+          <div class="ring-main">${shopTotal === 0 ? "No items yet" : shopBought + " of " + shopTotal + " bought"}</div>
+          <div class="ring-note">${shopTotal === 0 ? "Add items in the Shop list" : (dashboardShopStoreSummary || "Item" + (shopTotal === 1 ? "" : "s") + " to buy")}</div>
+        </div>
       </div>
     </div>
   </div>
@@ -2329,14 +2339,13 @@ function renderDashboard() {
     timelineSections = TIMELINE_SECTION_DEFAULTS.map(name => ({id: uid(), name}));
     await saveKey("wedding-timeline-sections", timelineSections);
   }
-  dressItems = (await loadKey("wedding-dress")) || [];
   helperTags = (await loadKey("wedding-helper-tags")) || [];
   budget = (await loadKey("wedding-budget")) || { total: 0, vendors: [], expenses: [] };
   if (!budget.vendors) budget.vendors = [];
   if (!budget.expenses) budget.expenses = [];
   if (budget.vendors.length === 0) {
     budget.vendors = BUDGET_SEED.map(v => ({id: uid(), ...v}));
-    if (!budget.total) budget.total = 22779;
+    if (!budget.total) budget.total = 50000;
     await saveKey("wedding-budget", budget);
   }
   shopList = (await loadKey("wedding-shop-list")) || [];
@@ -2353,7 +2362,6 @@ function renderDashboard() {
   renderShopList();
   renderActivities();
   renderTimeline();
-  renderDress();
 })();
 </script>
 </body>
