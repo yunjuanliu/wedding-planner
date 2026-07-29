@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "wedding-planner-app",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["-y", "serve", "-l", "3100", "public"],
+      "port": 3100
+    }
+  ]
+}
