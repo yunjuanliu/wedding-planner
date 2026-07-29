@@ -1835,16 +1835,44 @@ function renderDress() {
   });
 }
 
-let budget = { total: 0, expenses: [] };
+const BUDGET_SEED = [
+  {category:"Venue", vendor:"The Barn", contact:"Jason", phone:"(773) 456-5450", owner:"Yanyan", contract:"Yes", paid:"Yes", amount:9000, next:""},
+  {category:"Tent & Furniture", vendor:"Event Essentials", contact:"Julie Chamberlin", phone:"Julie@eventessentials.com", owner:"Yanyan", contract:"Yes", paid:"Yes", amount:4000, next:"Meet onsite; Get map"},
+  {category:"Porta Potty", vendor:"Lon's Jon's", contact:"NA", phone:"(608) 295-2700", owner:"Yanyan", contract:"Yes", paid:"Yes", amount:1000, next:""},
+  {category:"Catering", vendor:"Mad Jackie Hibachi", contact:"Molly", phone:"info@mjhibachi.com", owner:"Yanyan", contract:"Yes", paid:"No deposit", amount:5000, next:""},
+  {category:"Bar", vendor:"The Hemma Collective", contact:"Joshua Steiner", phone:"jrsteiner001@mac.com", owner:"Yanyan", contract:"Yes", paid:"Paid in full", amount:744, next:""},
+  {category:"Liquor", vendor:"Aman's Beer", contact:"Hillary", phone:"hillary@amansbeer.com", owner:"Yanyan", contract:"No", paid:"No", amount:null, next:"Buy liquor"},
+  {category:"Servers", vendor:"WDHstaff", contact:"Frank Amanti", phone:"312-243-0666; frank@wdhstaff.com", owner:"Yanyan", contract:"Yes", paid:"Yes", amount:515, next:"Chat once close to the date"},
+  {category:"Photography", vendor:"Numi Studio", contact:"Lily Ma", phone:"numistudiochicago@gmail.com", owner:"Yanyan", contract:"Yes", paid:"Yes", amount:1500, next:""},
+  {category:"Videography", vendor:"", contact:"Tim", phone:"", owner:"Jen", contract:"No", paid:"No", amount:300, next:"Rate: $50 × 6"},
+  {category:"Hair & Makeup", vendor:"", contact:"Harley", phone:"5104586065", owner:"Jen", contract:"No", paid:"No", amount:670, next:""},
+  {category:"Dessert", vendor:"", contact:"??? Joyce???", phone:"", owner:"Jen", contract:"No", paid:"No", amount:null, next:""},
+  {category:"Wedding Cake", vendor:"", contact:"Qunny", phone:"", owner:"Jen", contract:"No", paid:"No", amount:null, next:""},
+  {category:"盐酥鸡", vendor:"", contact:"Sue", phone:"608-338-5923", owner:"Jen", contract:"No", paid:"No", amount:50, next:""},
+  {category:"Sushi", vendor:"Fin Sushi", contact:"姜平", phone:"", owner:"Jen", contract:"No", paid:"No", amount:null, next:""},
+  {category:"Tuxedo", vendor:"Man's Wearhouse", contact:"", phone:"", owner:"Yanyan", contract:"No", paid:"No", amount:null, next:""},
+  {category:"Hotel Block", vendor:"Hampton Inn Elkhorn Lake", contact:"Suzy Jobes", phone:"suzy.jobes@elv3.com", owner:"Yanyan", contract:"Yes", paid:"No deposit", amount:0, next:"Inform guests"},
+  {category:"Insurance", vendor:"Markel", contact:"", phone:"", owner:"Yanyan", contract:"Yes", paid:"Paid in full", amount:300, next:""},
+];
+
+let budget = { total: 0, vendors: [], expenses: [] };
+function esc(s) {
+  return String(s == null ? "" : s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
 function budgetSpent() {
-  return budget.expenses.reduce((s, e) => s + (Number(e.amount) || 0), 0);
+  const v = (budget.vendors || []).reduce((s, r) => s + (Number(r.amount) || 0), 0);
+  const e = (budget.expenses || []).reduce((s, r) => s + (Number(r.amount) || 0), 0);
+  return v + e;
 }
 function fmtMoney(n) {
   return "$" + Number(n || 0).toLocaleString(undefined, {maximumFractionDigits: 0});
 }
 function renderBudget() {
   const p = document.getElementById("panel-budget");
+  if (!budget.vendors) budget.vendors = [];
+  if (!budget.expenses) budget.expenses = [];
   const spent = budgetSpent();
+  const vendorTotal = budget.vendors.reduce((s, r) => s + (Number(r.amount) || 0), 0);
   const remaining = (Number(budget.total) || 0) - spent;
   const pct = budget.total ? Math.min(100, Math.round(spent / budget.total * 100)) : 0;
   let html = `
@@ -1859,26 +1887,44 @@ function renderBudget() {
       <span class="muted">${remaining < 0 ? fmtMoney(Math.abs(remaining)) + " over" : fmtMoney(remaining) + " remaining"}</span>
     </div>
   </div>
-  <div class="add-form">
-    <input type="text" id="e-name" placeholder="Expense (e.g. Venue deposit)" style="flex:2; min-width:140px;" />
-    <input type="text" id="e-category" placeholder="Category" style="flex:1; min-width:100px;" />
-    <input type="number" id="e-amount" placeholder="Amount" style="flex:0 0 100px;" />
-    <button class="primary" id="e-add">Add expense</button>
+  <div class="row" style="justify-content:space-between; margin-bottom:10px;">
+    <span class="section-title" style="margin:0;">Vendors</span>
+    <button id="v-add">+ Add vendor</button>
   </div>
-  <div class="card" id="e-list"></div>`;
+  <div class="table-wrap">
+    <table class="data-table" style="min-width:1180px;">
+      <thead><tr>
+        <th>Category</th><th>Vendor</th><th>Contact</th><th>Phone / Email</th>
+        <th>Owner</th><th>Contract</th><th>Paid</th><th style="text-align:right;">Cost</th><th>Next steps</th><th></th>
+      </tr></thead>
+      <tbody id="v-body"></tbody>
+      <tfoot><tr>
+        <td colspan="7" style="text-align:right; font-weight:600;">Total</td>
+        <td style="text-align:right; font-weight:700; color:var(--primary);">${fmtMoney(vendorTotal)}</td>
+        <td colspan="2"></td>
+      </tr></tfoot>
+    </table>
+  </div>`;
   p.innerHTML = html;
 
-  const list = document.getElementById("e-list");
-  if (budget.expenses.length === 0) {
-    list.innerHTML = '<p class="muted">No expenses logged yet. Add one above.</p>';
+  const body = document.getElementById("v-body");
+  const yes = v => /^(yes|paid in full)$/i.test((v || "").trim());
+  if (!budget.vendors.length) {
+    body.innerHTML = '<tr><td colspan="10" class="muted" style="padding:12px;">No vendors yet. Add one above.</td></tr>';
   } else {
-    list.innerHTML = budget.expenses.map(e => `
-      <div class="item-row">
-        <span style="flex:2; min-width:120px; font-weight:600;">${e.name}</span>
-        <span class="muted" style="flex:1; min-width:90px;">${e.category || "Uncategorized"}</span>
-        <span style="flex:0 0 90px; font-weight:600;">${fmtMoney(e.amount)}</span>
-        <button class="icon-btn" data-id="${e.id}" data-action="remove" aria-label="Remove expense">${TRASH_ICON}</button>
-      </div>`).join("");
+    body.innerHTML = budget.vendors.map(v => `
+      <tr>
+        <td><input type="text" autocomplete="off" data-lpignore="true" data-1p-ignore data-form-type="other" data-vid="${v.id}" data-vfield="category" value="${esc(v.category)}" /></td>
+        <td><input type="text" autocomplete="off" data-lpignore="true" data-1p-ignore data-form-type="other" data-vid="${v.id}" data-vfield="vendor" value="${esc(v.vendor)}" placeholder="—" /></td>
+        <td><input type="text" autocomplete="off" data-lpignore="true" data-1p-ignore data-form-type="other" data-vid="${v.id}" data-vfield="contact" value="${esc(v.contact)}" placeholder="—" /></td>
+        <td><input type="text" autocomplete="off" data-lpignore="true" data-1p-ignore data-form-type="other" data-vid="${v.id}" data-vfield="phone" value="${esc(v.phone)}" placeholder="—" /></td>
+        <td><input type="text" autocomplete="off" data-lpignore="true" data-1p-ignore data-form-type="other" data-vid="${v.id}" data-vfield="owner" value="${esc(v.owner)}" style="width:80px;" /></td>
+        <td><input type="text" autocomplete="off" data-lpignore="true" data-1p-ignore data-form-type="other" data-vid="${v.id}" data-vfield="contract" value="${esc(v.contract)}" style="width:70px; ${yes(v.contract) ? "color:#1F8A5B; font-weight:600;" : ""}" /></td>
+        <td><input type="text" autocomplete="off" data-lpignore="true" data-1p-ignore data-form-type="other" data-vid="${v.id}" data-vfield="paid" value="${esc(v.paid)}" style="width:100px; ${yes(v.paid) ? "color:#1F8A5B; font-weight:600;" : ""}" /></td>
+        <td><input type="number" autocomplete="off" data-lpignore="true" data-1p-ignore data-form-type="other" data-vid="${v.id}" data-vfield="amount" value="${v.amount == null ? "" : v.amount}" placeholder="—" style="text-align:right; width:90px;" /></td>
+        <td><input type="text" autocomplete="off" data-lpignore="true" data-1p-ignore data-form-type="other" data-vid="${v.id}" data-vfield="next" value="${esc(v.next)}" placeholder="—" /></td>
+        <td><button class="icon-btn" data-vremove="${v.id}" aria-label="Remove vendor" title="Remove">${TRASH_ICON}</button></td>
+      </tr>`).join("");
   }
 
   document.getElementById("b-total").addEventListener("change", async (e) => {
@@ -1886,18 +1932,25 @@ function renderBudget() {
     await saveKey("wedding-budget", budget);
     renderBudget();
   });
-  document.getElementById("e-add").addEventListener("click", async () => {
-    const name = document.getElementById("e-name").value.trim();
-    const category = document.getElementById("e-category").value.trim();
-    const amount = Number(document.getElementById("e-amount").value) || 0;
-    if (!name) return;
-    budget.expenses.push({id: uid(), name, category, amount});
+  document.getElementById("v-add").addEventListener("click", async () => {
+    budget.vendors.push({id: uid(), category:"", vendor:"", contact:"", phone:"", owner:"", contract:"No", paid:"No", amount:null, next:""});
     await saveKey("wedding-budget", budget);
     renderBudget();
   });
-  list.querySelectorAll("[data-action=remove]").forEach(btn => {
+  body.querySelectorAll("[data-vfield]").forEach(el => {
+    el.addEventListener("change", async (e) => {
+      const row = budget.vendors.find(v => v.id === e.currentTarget.dataset.vid);
+      if (!row) return;
+      const field = e.currentTarget.dataset.vfield;
+      const raw = e.currentTarget.value;
+      row[field] = field === "amount" ? (raw.trim() === "" ? null : Number(raw) || 0) : raw;
+      await saveKey("wedding-budget", budget);
+      renderBudget();
+    });
+  });
+  body.querySelectorAll("[data-vremove]").forEach(btn => {
     btn.addEventListener("click", async (e) => {
-      budget.expenses = budget.expenses.filter(x => x.id !== e.currentTarget.dataset.id);
+      budget.vendors = budget.vendors.filter(v => v.id !== e.currentTarget.dataset.vremove);
       await saveKey("wedding-budget", budget);
       renderBudget();
     });
@@ -2278,7 +2331,14 @@ function renderDashboard() {
   }
   dressItems = (await loadKey("wedding-dress")) || [];
   helperTags = (await loadKey("wedding-helper-tags")) || [];
-  budget = (await loadKey("wedding-budget")) || { total: 0, expenses: [] };
+  budget = (await loadKey("wedding-budget")) || { total: 0, vendors: [], expenses: [] };
+  if (!budget.vendors) budget.vendors = [];
+  if (!budget.expenses) budget.expenses = [];
+  if (budget.vendors.length === 0) {
+    budget.vendors = BUDGET_SEED.map(v => ({id: uid(), ...v}));
+    if (!budget.total) budget.total = 22779;
+    await saveKey("wedding-budget", budget);
+  }
   shopList = (await loadKey("wedding-shop-list")) || [];
   storeOptions = (await loadKey("wedding-store-options")) || [];
   if (storeOptions.length === 0) {
