@@ -1388,9 +1388,12 @@ function renderGuests() {
   }
 
   document.getElementById("g-search").addEventListener("input", (e) => {
+    const pos = e.target.selectionStart;
     guestSearch = e.target.value;
     renderGuests();
-    document.getElementById("g-search").focus();
+    const el = document.getElementById("g-search");
+    el.focus();
+    el.setSelectionRange(pos, pos);
   });
 
   document.getElementById("g-add").addEventListener("click", async () => {
@@ -2168,9 +2171,12 @@ function renderShopList() {
   });
 
   document.getElementById("sl-search").addEventListener("input", (e) => {
+    const pos = e.target.selectionStart;
     shopSearch = e.target.value;
     renderShopList();
-    document.getElementById("sl-search").focus();
+    const el = document.getElementById("sl-search");
+    el.focus();
+    el.setSelectionRange(pos, pos);
   });
   document.getElementById("sl-store-filter").addEventListener("change", (e) => {
     shopStoreFilter = e.target.value;
