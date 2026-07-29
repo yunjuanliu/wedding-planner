@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Wedding planner</title>
+<title>Wedding Planner</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%22-6%20-4%20153%20158%22%3E%3Cpath%20d%3D%22M3%203L40.5%2070.5V147%22%20stroke%3D%22%23C9A96E%22%20stroke-width%3D%229%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20fill%3D%22none%22%2F%3E%3Cpath%20d%3D%22M78%203L40.5%2070.5%22%20stroke%3D%22%23C9A96E%22%20stroke-width%3D%229%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20fill%3D%22none%22%2F%3E%3Cpath%20d%3D%22M63%203L100.5%2070.5V147%22%20stroke%3D%22%23C9A96E%22%20stroke-width%3D%229%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20fill%3D%22none%22%2F%3E%3Cpath%20d%3D%22M138%203L100.5%2070.5%22%20stroke%3D%22%23C9A96E%22%20stroke-width%3D%229%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20fill%3D%22none%22%2F%3E%3Cpath%20d%3D%22M70.5%2085.5C66%2081%2061.5%2081%2061.5%2085.5C61.5%2090%2070.5%2097.5%2070.5%2097.5C70.5%2097.5%2079.5%2090%2079.5%2085.5C79.5%2081%2075%2081%2070.5%2085.5Z%22%20fill%3D%22%23ECD1D1%22%2F%3E%3C%2Fsvg%3E" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -33,10 +34,26 @@
     font-family: "Inter", sans-serif;
     font-weight: 700;
     font-size: 26px;
-    margin: 0 0 4px;
+    margin: 0;
     letter-spacing: -0.4px;
   }
-  .sub { color: var(--ink-soft); font-size: 14px; margin: 0 0 24px; }
+  .app-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 18px;
+    margin-bottom: 20px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: 0 1px 2px rgba(28, 27, 41, 0.03);
+  }
+  .app-logo { width: 34px; height: 36px; flex: 0 0 auto; display: block; }
+  @media (max-width: 480px) {
+    .app-header { gap: 10px; padding: 12px 14px; }
+    .app-logo { width: 28px; height: 30px; }
+    h1 { font-size: 21px; }
+  }
   .tabs {
     display: flex;
     gap: 4px;
@@ -376,8 +393,16 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>Wedding planner</h1>
-  <p class="sub">Everything in one place, saved automatically as you go.</p>
+  <header class="app-header">
+    <svg class="app-logo" viewBox="0 0 141 150" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Y&amp;Y monogram">
+      <path d="M3.00049 3.00055L40.5005 70.5005V147.001" stroke="#C9A96E" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M78.0005 3.00055L40.5005 70.5005" stroke="#C9A96E" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M63.0005 3.00055L100.5 70.5005V147.001" stroke="#C9A96E" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M138 3.00055L100.5 70.5005" stroke="#C9A96E" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M70.5005 85.5005C66.0005 81.0005 61.5005 81.0005 61.5005 85.5005C61.5005 90.0005 70.5005 97.5005 70.5005 97.5005C70.5005 97.5005 79.5005 90.0005 79.5005 85.5005C79.5005 81.0005 75.0005 81.0005 70.5005 85.5005Z" fill="#ECD1D1"/>
+    </svg>
+    <h1>Wedding Planner</h1>
+  </header>
 
   <div class="tabs">
     <div class="tab active" data-tab="dashboard">Dashboard</div>
