@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Wedding Planner</title>
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%22-6%20-4%20153%20158%22%3E%3Cpath%20d%3D%22M3%203L40.5%2070.5V147%22%20stroke%3D%22%23C9A96E%22%20stroke-width%3D%229%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20fill%3D%22none%22%2F%3E%3Cpath%20d%3D%22M78%203L40.5%2070.5%22%20stroke%3D%22%23C9A96E%22%20stroke-width%3D%229%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20fill%3D%22none%22%2F%3E%3Cpath%20d%3D%22M63%203L100.5%2070.5V147%22%20stroke%3D%22%23C9A96E%22%20stroke-width%3D%229%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20fill%3D%22none%22%2F%3E%3Cpath%20d%3D%22M138%203L100.5%2070.5%22%20stroke%3D%22%23C9A96E%22%20stroke-width%3D%229%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20fill%3D%22none%22%2F%3E%3Cpath%20d%3D%22M70.5%2085.5C66%2081%2061.5%2081%2061.5%2085.5C61.5%2090%2070.5%2097.5%2070.5%2097.5C70.5%2097.5%2079.5%2090%2079.5%2085.5C79.5%2081%2075%2081%2070.5%2085.5Z%22%20fill%3D%22%23ECD1D1%22%2F%3E%3C%2Fsvg%3E" />
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20300%20300%22%3E%3Crect%20x%3D%225%22%20y%3D%225%22%20width%3D%22290%22%20height%3D%22290%22%20rx%3D%22145%22%20fill%3D%22none%22%20stroke%3D%22%236E5FA6%22%20stroke-width%3D%2210%22%2F%3E%3Cpath%20d%3D%22M153.234%2089.5432C154.038%2088.095%20155.864%2087.5735%20157.313%2088.3781C158.761%2089.1829%20159.282%2091.009%20158.478%2092.4572L127.928%20147.446V209.763C127.928%20211.42%20126.585%20212.763%20124.928%20212.763C123.271%20212.763%20121.928%20211.42%20121.928%20209.763V147.446L91.3781%2092.4572C90.5735%2091.009%2091.095%2089.1829%2092.5432%2088.3781C93.9914%2087.5736%2095.8176%2088.0951%2096.6223%2089.5432L124.928%20140.493L153.234%2089.5432Z%22%20fill%3D%22%236E5FA6%22%2F%3E%3Cpath%20d%3D%22M202.718%2089.5432C203.523%2088.0951%20205.349%2087.5736%20206.797%2088.3782C208.245%2089.1829%20208.767%2091.0091%20207.962%2092.4573L177.412%20147.447V209.763C177.412%20211.42%20176.069%20212.763%20174.412%20212.763C172.756%20212.763%20171.412%20211.42%20171.412%20209.763V147.447L140.863%2092.4573C140.058%2091.009%20140.579%2089.1829%20142.028%2088.3782C143.476%2087.5736%20145.302%2088.0951%20146.107%2089.5432L174.412%20140.493L202.718%2089.5432Z%22%20fill%3D%22%236E5FA6%22%2F%3E%3Cpath%20d%3D%22M149.67%20159.041C145.959%20155.33%20142.247%20155.33%20142.247%20159.041C142.247%20162.753%20149.67%20168.938%20149.67%20168.938C149.67%20168.938%20157.093%20162.753%20157.093%20159.041C157.093%20155.33%20153.381%20155.33%20149.67%20159.041Z%22%20fill%3D%22%238E5BC6%22%2F%3E%3C%2Fsvg%3E" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -46,10 +46,10 @@
     margin-bottom: 22px;
     border-bottom: 1px solid var(--border);
   }
-  .app-logo { width: 34px; height: 36px; flex: 0 0 auto; display: block; }
+  .app-logo { width: 38px; height: 38px; flex: 0 0 auto; display: block; }
   @media (max-width: 480px) {
     .app-header { gap: 10px; padding: 16px 16px 14px; margin-bottom: 18px; }
-    .app-logo { width: 28px; height: 30px; }
+    .app-logo { width: 32px; height: 32px; }
     h1 { font-size: 21px; }
   }
   .tabs {
@@ -392,12 +392,11 @@
 </head>
 <body>
 <header class="app-header">
-  <svg class="app-logo" viewBox="0 0 141 150" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Y&amp;Y monogram">
-    <path d="M3.00049 3.00055L40.5005 70.5005V147.001" stroke="#C9A96E" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
-    <path d="M78.0005 3.00055L40.5005 70.5005" stroke="#C9A96E" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
-    <path d="M63.0005 3.00055L100.5 70.5005V147.001" stroke="#C9A96E" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
-    <path d="M138 3.00055L100.5 70.5005" stroke="#C9A96E" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
-    <path d="M70.5005 85.5005C66.0005 81.0005 61.5005 81.0005 61.5005 85.5005C61.5005 90.0005 70.5005 97.5005 70.5005 97.5005C70.5005 97.5005 79.5005 90.0005 79.5005 85.5005C79.5005 81.0005 75.0005 81.0005 70.5005 85.5005Z" fill="#ECD1D1"/>
+  <svg class="app-logo" viewBox="0 0 300 300" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Y&amp;Y monogram">
+    <rect x="3.5" y="3.5" width="293" height="293" rx="146.5" stroke="#6E5FA6" stroke-width="7"/>
+    <path d="M153.234 89.5432C154.038 88.095 155.864 87.5735 157.313 88.3781C158.761 89.1829 159.282 91.009 158.478 92.4572L127.928 147.446V209.763C127.928 211.42 126.585 212.763 124.928 212.763C123.271 212.763 121.928 211.42 121.928 209.763V147.446L91.3781 92.4572C90.5735 91.009 91.095 89.1829 92.5432 88.3781C93.9914 87.5736 95.8176 88.0951 96.6223 89.5432L124.928 140.493L153.234 89.5432Z" fill="#6E5FA6"/>
+    <path d="M202.718 89.5432C203.523 88.0951 205.349 87.5736 206.797 88.3782C208.245 89.1829 208.767 91.0091 207.962 92.4573L177.412 147.447V209.763C177.412 211.42 176.069 212.763 174.412 212.763C172.756 212.763 171.412 211.42 171.412 209.763V147.447L140.863 92.4573C140.058 91.009 140.579 89.1829 142.028 88.3782C143.476 87.5736 145.302 88.0951 146.107 89.5432L174.412 140.493L202.718 89.5432Z" fill="#6E5FA6"/>
+    <path d="M149.67 159.041C145.959 155.33 142.247 155.33 142.247 159.041C142.247 162.753 149.67 168.938 149.67 168.938C149.67 168.938 157.093 162.753 157.093 159.041C157.093 155.33 153.381 155.33 149.67 159.041Z" fill="#8E5BC6"/>
   </svg>
   <h1>Wedding Planner</h1>
 </header>
