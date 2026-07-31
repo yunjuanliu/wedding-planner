@@ -997,28 +997,46 @@ const SB_HEADERS = {
   "Content-Type": "application/json"
 };
 
+// If the Supabase project is unreachable, requests must fail fast: the app
+// used to sit on a blank screen until the browser gave up on each one.
+const SB_TIMEOUT_MS = 3000;
+let remoteAvailable = true;
+async function sbFetch(url, options) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), SB_TIMEOUT_MS);
+  try {
+    return await fetch(url, Object.assign({}, options, {signal: ctrl.signal}));
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 let storeCache = null;
 async function loadStore() {
   if (storeCache) return storeCache;
   storeCache = {};
   try {
-    const r = await fetch(SUPABASE_URL + "/rest/v1/wedding_store?select=key,value", { headers: SB_HEADERS });
+    const r = await sbFetch(SUPABASE_URL + "/rest/v1/wedding_store?select=key,value", { headers: SB_HEADERS });
     if (r.ok) (await r.json()).forEach(row => { storeCache[row.key] = row.value; });
-  } catch (e) {}
+    else remoteAvailable = false;
+  } catch (e) {
+    // One failure is enough: stop paying the timeout on every later save.
+    remoteAvailable = false;
+  }
   return storeCache;
 }
 
 async function saveKey(key, value) {
   const store = await loadStore();
   store[key] = value;
-  try {
-    await fetch(SUPABASE_URL + "/rest/v1/wedding_store", {
-      method: "POST",
-      headers: { ...SB_HEADERS, "Prefer": "resolution=merge-duplicates" },
-      body: JSON.stringify({ key: key, value: value })
-    });
-  } catch (e) {}
   try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) {}
+  if (!remoteAvailable) return;
+  // Fire and forget so a slow network never blocks the UI.
+  sbFetch(SUPABASE_URL + "/rest/v1/wedding_store", {
+    method: "POST",
+    headers: Object.assign({}, SB_HEADERS, {"Prefer": "resolution=merge-duplicates"}),
+    body: JSON.stringify({ key: key, value: value })
+  }).catch(() => { remoteAvailable = false; });
 }
 
 async function loadKey(key) {
