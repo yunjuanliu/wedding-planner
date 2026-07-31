@@ -63,8 +63,10 @@
     flex-wrap: wrap;
   }
   .tab {
-    flex: 1 1 0;
-    min-width: 0;
+    /* Share the bar evenly when there is room, but never squeeze a label
+       narrower than its text - wrap to another row instead. */
+    flex: 1 1 auto;
+    min-width: max-content;
     text-align: center;
     white-space: nowrap;
     padding: 9px 12px;
