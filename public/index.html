@@ -1011,14 +1011,21 @@ async function sbFetch(url, options) {
   }
 }
 
+// Edits made while the backend is unreachable live only in localStorage.
+// Stamping them lets a later reconnect tell "edited offline just now" apart
+// from "stale copy from weeks ago", instead of silently picking one.
+const LS_TS = "::savedAt";
 let storeCache = null;
 async function loadStore() {
   if (storeCache) return storeCache;
   storeCache = {};
   try {
-    const r = await sbFetch(SUPABASE_URL + "/rest/v1/wedding_store?select=key,value", { headers: SB_HEADERS });
-    if (r.ok) (await r.json()).forEach(row => { storeCache[row.key] = row.value; });
-    else remoteAvailable = false;
+    const r = await sbFetch(SUPABASE_URL + "/rest/v1/wedding_store?select=key,value,updated_at", { headers: SB_HEADERS });
+    if (r.ok) {
+      (await r.json()).forEach(row => {
+        storeCache[row.key] = { value: row.value, ts: Date.parse(row.updated_at) || 0 };
+      });
+    } else remoteAvailable = false;
   } catch (e) {
     // One failure is enough: stop paying the timeout on every later save.
     remoteAvailable = false;
@@ -1026,10 +1033,22 @@ async function loadStore() {
   return storeCache;
 }
 
+function readLocal(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw === null) return null;
+    return { value: JSON.parse(raw), ts: Number(localStorage.getItem(key + LS_TS)) || 0 };
+  } catch (e) { return null; }
+}
+
 async function saveKey(key, value) {
   const store = await loadStore();
-  store[key] = value;
-  try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) {}
+  const now = Date.now();
+  store[key] = { value: value, ts: now };
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+    localStorage.setItem(key + LS_TS, String(now));
+  } catch (e) {}
   if (!remoteAvailable) return;
   // Fire and forget so a slow network never blocks the UI.
   sbFetch(SUPABASE_URL + "/rest/v1/wedding_store", {
@@ -1041,11 +1060,32 @@ async function saveKey(key, value) {
 
 async function loadKey(key) {
   const store = await loadStore();
-  if (key in store) return store[key];
-  try {
-    const v = localStorage.getItem(key);
-    return v ? JSON.parse(v) : null;
-  } catch (e) { return null; }
+  const remote = store[key];
+  const local = readLocal(key);
+  if (remote && local) return local.ts > remote.ts ? local.value : remote.value;
+  if (remote) return remote.value;
+  return local ? local.value : null;
+}
+
+// Anything saved locally that the backend does not have (or that is newer
+// than what it has) gets pushed up once the connection comes back.
+async function syncLocalToRemote() {
+  if (!remoteAvailable) return [];
+  const store = await loadStore();
+  const pushed = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (!key || key.indexOf("wedding-") !== 0 || key.indexOf(LS_TS) !== -1) continue;
+    const local = readLocal(key);
+    if (!local) continue;
+    const remote = store[key];
+    if (!remote || local.ts > remote.ts) pushed.push(key);
+  }
+  for (const key of pushed) {
+    const local = readLocal(key);
+    if (local) await saveKey(key, local.value);
+  }
+  return pushed;
 }
 
 const WEDDING_DATE = new Date(2026, 8, 19); // September 19, 2026
@@ -2567,6 +2607,10 @@ function renderDashboard() {
   renderShopList();
   renderActivities();
   renderTimeline();
+
+  // Push anything that was only saved locally (e.g. edits made while the
+  // backend was down) up to the server now that it is reachable again.
+  syncLocalToRemote();
 })();
 </script>
 </body>
