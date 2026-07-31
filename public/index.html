@@ -190,6 +190,15 @@
   .modal-box h3 { margin: 0 0 14px; font-size: 16px; font-weight: 600; }
   .modal-box input[type=text] { width: 100%; margin-bottom: 16px; }
   .modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
+  .field-label { display: block; margin: 14px 0 5px; font-size: 12px; color: var(--ink-soft); font-weight: 500; }
+  textarea {
+    border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px;
+    font-size: 14px; font-family: inherit; background: var(--white); color: var(--ink);
+    outline: none; width: 100%; resize: vertical; transition: border-color 0.15s;
+  }
+  textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
+  .area-name-link { cursor: pointer; font-weight: 600; }
+  .area-name-link:hover { color: var(--primary); text-decoration: underline; }
   .task-text { cursor: pointer; border-bottom: 1px dashed transparent; }
   .task-text:hover { border-bottom-color: var(--primary); color: var(--primary); }
   .switch {
@@ -435,6 +444,34 @@
     <div class="modal-actions">
       <button id="tags-modal-add">+ Add</button>
       <button id="tags-modal-close">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="area-modal">
+  <div class="modal-box" style="max-width:460px;">
+    <div class="row" style="justify-content:space-between; align-items:flex-start; flex-wrap:nowrap; gap:10px; margin-bottom:2px;">
+      <input type="text" id="area-modal-name" autocomplete="off" data-lpignore="true" data-1p-ignore
+        style="flex:1; font-size:16px; font-weight:600;" />
+      <button class="icon-btn" id="area-modal-close" aria-label="Close" title="Close">&#10005;</button>
+    </div>
+    <p class="muted" id="area-modal-section" style="margin:0 0 12px;"></p>
+
+    <label class="field-label" for="area-modal-assignee">Assignee</label>
+    <select id="area-modal-assignee" style="width:100%;"></select>
+
+    <label class="field-label" for="area-modal-notes">Notes</label>
+    <textarea id="area-modal-notes" rows="3" placeholder="Anything to remember about this area…"></textarea>
+
+    <div class="row" style="justify-content:space-between; margin:18px 0 6px;">
+      <span class="section-title" style="margin:0;">To-do</span>
+      <span class="muted" id="area-modal-todo-count"></span>
+    </div>
+    <div id="area-modal-todos" style="margin-bottom:10px;"></div>
+    <div class="add-form" style="margin-bottom:0;">
+      <input type="text" id="area-modal-todo-new" placeholder="Add a to-do" autocomplete="off"
+        data-lpignore="true" data-1p-ignore style="flex:1; min-width:140px;" />
+      <button class="primary" id="area-modal-todo-add">Add</button>
     </div>
   </div>
 </div>
@@ -1640,60 +1677,277 @@ function renderGuests() {
   });
 }
 
+const AREA_SEED = [
+  {id: "sec-checkin",  label: "Check-in",      areas: ["Check-in Table", "Activity booth"]},
+  {id: "sec-gallery",  label: "Image Gallery", areas: []},
+  {id: "sec-ceremony", label: "Ceremony",      areas: ["Dessert Table"]},
+  {id: "sec-cocktail", label: "Cocktail",      areas: []},
+  {id: "sec-reception",label: "Reception",     areas: []},
+];
+
 let activities = [];
+let openAreaRef = null;
+
+function findArea(sectionId, areaId) {
+  const section = activities.find(s => s.id === sectionId);
+  if (!section) return null;
+  const area = (section.areas || []).find(a => a.id === areaId);
+  return area ? {section, area} : null;
+}
+function areaTodoCounts(area) {
+  const items = area.todos || [];
+  return {done: items.filter(t => t.done).length, total: items.length};
+}
+function assigneeOptionsHtml(current) {
+  return ["<option value=\"\">Unassigned</option>"]
+    .concat(helperTags.map(t => `<option value="${esc(t.name)}" ${t.name === current ? "selected" : ""}>${esc(t.name)}</option>`))
+    .concat(["<option value=\"__add_new__\">+ Add new…</option>", "<option value=\"__manage__\">✎ Manage tags…</option>"])
+    .join("");
+}
+// Shared by the area rows and the to-do rows inside the detail modal.
+// Returns true when the change was an add/manage action the caller should not treat as a value.
+function handleAssigneeAction(selectEl, previousValue, onPicked) {
+  if (selectEl.value === "__add_new__") {
+    selectEl.value = previousValue || "";
+    openInputModal("Helper name", "", (name) => {
+      const trimmed = name.trim();
+      if (!trimmed) return;
+      helperTags.push({id: uid(), name: trimmed});
+      saveKey("wedding-helper-tags", helperTags);
+      if (onPicked) onPicked(trimmed);
+    });
+    return true;
+  }
+  if (selectEl.value === "__manage__") {
+    selectEl.value = previousValue || "";
+    openTagsModal("helpers");
+    return true;
+  }
+  return false;
+}
+
 function renderActivities() {
   const p = document.getElementById("panel-activities");
-  let html = `<div class="add-form">
-    <input type="text" id="a-name" placeholder="Activity" style="flex:2; min-width:130px;" />
-    <input type="text" id="a-owner" placeholder="Owner" style="flex:1; min-width:100px;" />
-    <input type="date" id="a-due" style="flex:0 0 140px;" />
-    <button class="primary" id="a-add">Add activity</button>
-  </div>
-  <div class="card" id="a-list"></div>`;
-  p.innerHTML = html;
-  const list = document.getElementById("a-list");
-  if (activities.length === 0) {
-    list.innerHTML = '<p class="muted">No activities yet. Add one above.</p>';
-  } else {
-    list.innerHTML = activities.map(a => `
-      <div class="item-row">
-        <span style="flex:2; min-width:120px; font-weight:600;">${a.name}</span>
-        <span class="muted" style="flex:1; min-width:90px;">${a.owner || "Unassigned"}</span>
-        <span class="muted" style="flex:0 0 100px;">${a.due || "No date"}</span>
-        <select data-id="${a.id}" data-field="status" style="flex:0 0 130px;">
-          <option value="not-started" ${a.status==="not-started"?"selected":""}>Not started</option>
-          <option value="in-progress" ${a.status==="in-progress"?"selected":""}>In progress</option>
-          <option value="done" ${a.status==="done"?"selected":""}>Done</option>
-        </select>
-        <button class="icon-btn" data-id="${a.id}" data-action="remove" aria-label="Remove activity">${TRASH_ICON}</button>
-      </div>`).join("");
-  }
-  document.getElementById("a-add").addEventListener("click", async () => {
-    const name = document.getElementById("a-name").value.trim();
-    const owner = document.getElementById("a-owner").value.trim();
-    const due = document.getElementById("a-due").value;
-    if (!name) return;
-    activities.push({id:uid(), name, owner, due, status:"not-started"});
-    await saveKey("wedding-activities", activities);
-    renderActivities();
+  let totalAreas = 0, totalDone = 0, totalTodos = 0;
+  activities.forEach(s => (s.areas || []).forEach(a => {
+    totalAreas++;
+    const c = areaTodoCounts(a);
+    totalDone += c.done; totalTodos += c.total;
+  }));
+
+  let html = `<div class="stat-row">
+    <div class="stat"><div class="num">${totalAreas}</div><div class="lbl">Areas</div></div>
+    <div class="stat"><div class="num">${totalDone} / ${totalTodos}</div><div class="lbl">Area to-dos done</div></div>
+    <div class="stat" style="flex:2; display:flex; flex-direction:column; justify-content:center;">
+      <div class="progress-bar"><div class="progress-fill" style="width:${totalTodos ? Math.round(totalDone/totalTodos*100) : 0}%"></div></div>
+    </div>
+  </div>`;
+
+  activities.forEach(section => {
+    const areas = section.areas || [];
+    const secDone = areas.reduce((n,a) => n + areaTodoCounts(a).done, 0);
+    const secTotal = areas.reduce((n,a) => n + areaTodoCounts(a).total, 0);
+    html += `<div class="card">
+      <div class="row" style="justify-content:space-between; margin-bottom:8px;">
+        <p class="section-title" style="margin:0;">${esc(section.label)} <span class="muted" style="font-weight:500;">(${areas.length})</span></p>
+        <span class="muted">${secTotal ? secDone + "/" + secTotal + " to-dos" : ""}</span>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table" style="min-width:480px;">
+          <thead><tr>
+            <th>Area</th><th style="width:170px;">Assignee</th><th style="width:90px;">To-dos</th><th style="width:44px;"></th>
+          </tr></thead>
+          <tbody>`;
+    if (areas.length === 0) {
+      html += `<tr><td colspan="4" class="muted" style="padding:12px;">No areas yet. Add one below.</td></tr>`;
+    } else {
+      areas.forEach(area => {
+        const c = areaTodoCounts(area);
+        html += `<tr>
+          <td><span class="area-name-link" data-open-section="${section.id}" data-open-area="${area.id}" title="Open details">${esc(area.name)}</span></td>
+          <td><select data-assign-section="${section.id}" data-assign-area="${area.id}" style="width:100%;">${assigneeOptionsHtml(area.assignee)}</select></td>
+          <td>${c.total ? `<span class="${c.done === c.total ? "" : "muted"}">${c.done}/${c.total}</span>` : '<span class="muted">—</span>'}</td>
+          <td><button class="icon-btn" data-remove-section="${section.id}" data-remove-area="${area.id}" aria-label="Remove area" title="Remove">${TRASH_ICON}</button></td>
+        </tr>`;
+      });
+    }
+    html += `</tbody></table></div>
+      <div class="add-form" style="margin:10px 0 0;">
+        <input type="text" data-add-section="${section.id}" placeholder="Add an area" autocomplete="off"
+          data-lpignore="true" data-1p-ignore style="flex:1; min-width:150px;" />
+        <button data-add-btn="${section.id}">Add area</button>
+      </div>
+    </div>`;
   });
-  list.querySelectorAll("[data-field]").forEach(el => {
-    el.addEventListener("change", async (e) => {
-      const a = activities.find(x => x.id === e.currentTarget.dataset.id);
-      if (!a) return;
-      a[e.target.dataset.field] = e.target.value;
-      await saveKey("wedding-activities", activities);
+  p.innerHTML = html;
+
+  p.querySelectorAll("[data-open-area]").forEach(el => {
+    el.addEventListener("click", () => openAreaModal(el.dataset.openSection, el.dataset.openArea));
+  });
+  p.querySelectorAll("[data-assign-area]").forEach(sel => {
+    sel.addEventListener("change", async (e) => {
+      const found = findArea(e.currentTarget.dataset.assignSection, e.currentTarget.dataset.assignArea);
+      if (!found) return;
+      if (handleAssigneeAction(e.currentTarget, found.area.assignee, async (name) => {
+        found.area.assignee = name;
+        await saveKey("wedding-activity-areas", activities);
+        renderActivities();
+      })) return;
+      found.area.assignee = e.currentTarget.value;
+      await saveKey("wedding-activity-areas", activities);
       renderActivities();
     });
   });
-  list.querySelectorAll("[data-action=remove]").forEach(btn => {
+  p.querySelectorAll("[data-remove-area]").forEach(btn => {
     btn.addEventListener("click", async (e) => {
-      activities = activities.filter(a => a.id !== e.currentTarget.dataset.id);
-      await saveKey("wedding-activities", activities);
+      const section = activities.find(s => s.id === e.currentTarget.dataset.removeSection);
+      if (!section) return;
+      section.areas = (section.areas || []).filter(a => a.id !== e.currentTarget.dataset.removeArea);
+      await saveKey("wedding-activity-areas", activities);
       renderActivities();
+    });
+  });
+  p.querySelectorAll("[data-add-btn]").forEach(btn => {
+    btn.addEventListener("click", async (e) => {
+      const sectionId = e.currentTarget.dataset.addBtn;
+      const input = p.querySelector(`[data-add-section="${sectionId}"]`);
+      const name = input.value.trim();
+      if (!name) return;
+      const section = activities.find(s => s.id === sectionId);
+      section.areas = section.areas || [];
+      section.areas.push({id: uid(), name, assignee: "", notes: "", todos: []});
+      await saveKey("wedding-activity-areas", activities);
+      renderActivities();
+    });
+  });
+  p.querySelectorAll("[data-add-section]").forEach(inp => {
+    inp.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); p.querySelector(`[data-add-btn="${e.currentTarget.dataset.addSection}"]`).click(); }
     });
   });
 }
+
+function openAreaModal(sectionId, areaId) {
+  const found = findArea(sectionId, areaId);
+  if (!found) return;
+  openAreaRef = {sectionId, areaId};
+  const {section, area} = found;
+  document.getElementById("area-modal-name").value = area.name || "";
+  document.getElementById("area-modal-section").textContent = section.label;
+  document.getElementById("area-modal-notes").value = area.notes || "";
+  const assignee = document.getElementById("area-modal-assignee");
+  assignee.innerHTML = assigneeOptionsHtml(area.assignee);
+  assignee.value = area.assignee || "";
+  renderAreaTodos();
+  document.getElementById("area-modal").classList.add("open");
+}
+function closeAreaModal() {
+  document.getElementById("area-modal").classList.remove("open");
+  openAreaRef = null;
+  renderActivities();
+}
+function currentArea() {
+  return openAreaRef ? findArea(openAreaRef.sectionId, openAreaRef.areaId) : null;
+}
+function renderAreaTodos() {
+  const found = currentArea();
+  if (!found) return;
+  const area = found.area;
+  const wrap = document.getElementById("area-modal-todos");
+  const items = area.todos || [];
+  const c = areaTodoCounts(area);
+  document.getElementById("area-modal-todo-count").textContent = c.total ? `${c.done}/${c.total} done` : "";
+  if (items.length === 0) {
+    wrap.innerHTML = '<p class="muted" style="font-size:13px;">No to-dos yet. Add one below.</p>';
+    return;
+  }
+  wrap.innerHTML = items.map(t => `
+    <div class="item-row">
+      <input type="checkbox" data-area-todo-done="${t.id}" ${t.done ? "checked" : ""} aria-label="Done" />
+      <span class="${t.done ? "strike" : ""}" style="flex:1; min-width:120px;">${esc(t.text)}</span>
+      <select data-area-todo-assign="${t.id}" style="flex:0 0 150px;">${assigneeOptionsHtml(t.assignee)}</select>
+      <button class="icon-btn" data-area-todo-remove="${t.id}" aria-label="Remove to-do" title="Remove">${TRASH_ICON}</button>
+    </div>`).join("");
+
+  wrap.querySelectorAll("[data-area-todo-done]").forEach(cb => {
+    cb.addEventListener("change", async (e) => {
+      const t = area.todos.find(x => x.id === e.currentTarget.dataset.areaTodoDone);
+      if (!t) return;
+      t.done = e.currentTarget.checked;
+      await saveKey("wedding-activity-areas", activities);
+      renderAreaTodos();
+    });
+  });
+  wrap.querySelectorAll("[data-area-todo-assign]").forEach(sel => {
+    sel.addEventListener("change", async (e) => {
+      const t = area.todos.find(x => x.id === e.currentTarget.dataset.areaTodoAssign);
+      if (!t) return;
+      if (handleAssigneeAction(e.currentTarget, t.assignee, async (name) => {
+        t.assignee = name;
+        await saveKey("wedding-activity-areas", activities);
+        renderAreaTodos();
+      })) return;
+      t.assignee = e.currentTarget.value;
+      await saveKey("wedding-activity-areas", activities);
+      renderAreaTodos();
+    });
+  });
+  wrap.querySelectorAll("[data-area-todo-remove]").forEach(btn => {
+    btn.addEventListener("click", async (e) => {
+      area.todos = area.todos.filter(x => x.id !== e.currentTarget.dataset.areaTodoRemove);
+      await saveKey("wedding-activity-areas", activities);
+      renderAreaTodos();
+    });
+  });
+}
+async function addAreaTodo() {
+  const found = currentArea();
+  if (!found) return;
+  const input = document.getElementById("area-modal-todo-new");
+  const text = input.value.trim();
+  if (!text) return;
+  found.area.todos = found.area.todos || [];
+  found.area.todos.push({id: uid(), text, done: false, assignee: ""});
+  input.value = "";
+  await saveKey("wedding-activity-areas", activities);
+  renderAreaTodos();
+  input.focus();
+}
+document.getElementById("area-modal-close").addEventListener("click", closeAreaModal);
+document.getElementById("area-modal").addEventListener("click", (e) => {
+  if (e.target.id === "area-modal") closeAreaModal();
+});
+document.getElementById("area-modal-name").addEventListener("change", async (e) => {
+  const found = currentArea();
+  if (!found) return;
+  const next = e.currentTarget.value.trim();
+  if (!next) { e.currentTarget.value = found.area.name; return; }
+  found.area.name = next;
+  await saveKey("wedding-activity-areas", activities);
+});
+document.getElementById("area-modal-notes").addEventListener("change", async (e) => {
+  const found = currentArea();
+  if (!found) return;
+  found.area.notes = e.currentTarget.value;
+  await saveKey("wedding-activity-areas", activities);
+});
+document.getElementById("area-modal-assignee").addEventListener("change", async (e) => {
+  const found = currentArea();
+  if (!found) return;
+  if (handleAssigneeAction(e.currentTarget, found.area.assignee, async (name) => {
+    found.area.assignee = name;
+    const sel = document.getElementById("area-modal-assignee");
+    sel.innerHTML = assigneeOptionsHtml(name);
+    sel.value = name;
+    await saveKey("wedding-activity-areas", activities);
+  })) return;
+  found.area.assignee = e.currentTarget.value;
+  await saveKey("wedding-activity-areas", activities);
+});
+document.getElementById("area-modal-todo-add").addEventListener("click", addAreaTodo);
+document.getElementById("area-modal-todo-new").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); addAreaTodo(); }
+});
 
 const TIMELINE_SEED = [{"time": "7:00 am", "event": "Wake up & light breakfast", "duration": "", "desc": "Bride & wedding party fuels up before the long day.", "section": "Morning Preparation", "order": 0}, {"time": "8:15 am", "event": "Return to getting-ready suite", "duration": "", "desc": "Travel back; bridal party hair & makeup begins; groom & groomsmen start getting ready.", "section": "Morning Preparation", "order": 1}, {"time": "8:15 am", "event": "Mom 1 makeup", "duration": "1 hr", "desc": "Mom 1's makeup session. (8:15 am to 9:15 am)", "section": "Morning Preparation", "order": 2}, {"time": "9:00 am", "event": "Tea ceremony", "duration": "~20 min", "desc": "Traditional tea serving with family elders, a moment of gratitude before celebrations begin.", "section": "Morning Preparation", "order": 3}, {"time": "9:15 am", "event": "Mom 2 makeup", "duration": "1 hr", "desc": "Mom 2's makeup session. (9:15 am to 10:15 am)", "section": "Morning Preparation", "order": 4}, {"time": "9:30 am", "event": "Bride's makeup begins", "duration": "3 hr", "desc": "Foundation, eyes, lips, setting. (9:30 am to 12:30 pm)", "section": "Morning Preparation", "order": 5}, {"time": "11:30 am", "event": "Bridal party lunch break", "duration": "", "desc": "Light lunch delivered to getting-ready suite, avoid anything heavy or staining.", "section": "Morning Preparation", "order": 6}, {"time": "12:00 pm", "event": "Groom fully ready", "duration": "", "desc": "Groom & groomsmen portraits with photographer.", "section": "Morning Preparation", "order": 7}, {"time": "12:30 pm", "event": "Ceremony rehearsal", "duration": "~45 min", "desc": "Full wedding party at ceremony venue, processional order, positions, cues, vow exchange run-through, recessional.", "section": "Morning Preparation", "order": 8}, {"time": "12:30 pm", "event": "Makeup complete, into the gown", "duration": "", "desc": "Dress assist with bridesmaids; veil, accessories, and shoes.", "section": "Morning Preparation", "order": 9}, {"time": "1:00 pm", "event": "Bride fully ready, detail photos", "duration": "", "desc": "Bouquet, rings, shoes, dress details; getting-ready shots with bridal party.", "section": "Morning Preparation", "order": 10}, {"time": "1:45 pm", "event": "Holding room, final touch-ups", "duration": "", "desc": "Calm moment before the first look; officiant & wedding party in position.", "section": "Morning Preparation", "order": 11}, {"time": "2:00 pm", "event": "First look", "duration": "~15 min", "desc": "Bride & groom see each other for the first time, private reveal before guests arrive.", "section": "Pre-Ceremony", "order": 12}, {"time": "2:15 pm", "event": "Couple portraits", "duration": "~30 min", "desc": "Golden light window, romantic couple shots at portrait locations.", "section": "Pre-Ceremony", "order": 13}, {"time": "2:45 pm", "event": "Bridal party portraits", "duration": "~15 min", "desc": "Bridesmaids, groomsmen, full bridal party lineup shots.", "section": "Pre-Ceremony", "order": 14}, {"time": "3:00 pm", "event": "Guest check-in begins", "duration": "", "desc": "Welcome table open; escort cards, programs, welcome bags distributed.", "section": "Pre-Ceremony", "order": 15}, {"time": "3:10 pm", "event": "Fun activities open", "duration": "", "desc": "Design your own bag, DIY scented crystal stones, and more.", "section": "Pre-Ceremony", "order": 16}, {"time": "3:45 pm", "event": "Couple to holding room", "duration": "", "desc": "Final touch-ups, calm moment; officiant & wedding party in position.", "section": "Pre-Ceremony", "order": 17}, {"time": "4:00 pm", "event": "Ceremony begins", "duration": "~25-30 min", "desc": "Processional, vows, ring exchange, pronouncement & kiss.", "section": "Ceremony", "order": 18}, {"time": "4:30 pm", "event": "Group photos", "duration": "~25 min", "desc": "Family formals first (immediate family, grandparents, extended), then full guest group shot.", "section": "Ceremony", "order": 19}, {"time": "5:00 pm", "event": "Cocktail hour begins", "duration": "", "desc": "Guests move to cocktail space; passed appetizers & drinks; lounge music.", "section": "Cocktail Hour", "order": 20}, {"time": "5:30 pm", "event": "Couple joins cocktail hour briefly", "duration": "", "desc": "Mingle with guests, grab a bite; candid photos.", "section": "Cocktail Hour", "order": 21}, {"time": "5:45 pm", "event": "Guests invited to take their seats", "duration": "", "desc": "MC or venue staff directs guests into the reception room.", "section": "Cocktail Hour", "order": 22}, {"time": "6:00 pm", "event": "Grand entrance", "duration": "", "desc": "Bridal party introduced one by one; couple enters last to hype music.", "section": "Reception", "order": 23}, {"time": "6:10 pm", "event": "Dinner service begins", "duration": "", "desc": "First course served; ambient background music during dining.", "section": "Reception", "order": 24}, {"time": "7:00 pm", "event": "Welcome speech & blessing", "duration": "~15 min", "desc": "Host or family elder opens with a blessing; couple's welcome toast.", "section": "Reception", "order": 25}, {"time": "7:20 pm", "event": "Toasts from family & friends", "duration": "", "desc": "Best man, maid of honor, and any additional speakers (~2-3 total).", "section": "Reception", "order": 26}, {"time": "7:30 pm", "event": "First dance", "duration": "~10 min", "desc": "Couple's first dance; parent dances to follow.", "section": "Evening Highlights", "order": 27}, {"time": "7:45 pm", "event": "Dance floor opens", "duration": "", "desc": "DJ or band kicks off; dessert stations may open early for late arrivals.", "section": "Evening Highlights", "order": 28}, {"time": "8:30 pm", "event": "Cake cutting & dessert", "duration": "", "desc": "Couple cuts the cake together; dessert station fully opens for all guests.", "section": "Evening Highlights", "order": 29}, {"time": "9:00 pm", "event": "Party time", "duration": "", "desc": "Full dance floor, glow sticks, games, high energy. Let the night unfold!", "section": "Evening Highlights", "order": 30}, {"time": "10:30 pm", "event": "Last song & farewell", "duration": "", "desc": "Final dance announced; guests line up for send-off.", "section": "Evening Highlights", "order": 31}, {"time": "11:00 pm", "event": "Reception ends, send-off", "duration": "", "desc": "Couple's grand exit (sparklers, ribbon wands, or confetti).", "section": "Evening Highlights", "order": 32}];
 let timeline = [];
@@ -2584,7 +2838,15 @@ function renderDashboard() {
     guests = GUEST_SEED.map(s => ({id: uid(), ...s}));
     await saveKey("wedding-guests", guests);
   }
-  activities = (await loadKey("wedding-activities")) || [];
+  activities = (await loadKey("wedding-activity-areas")) || [];
+  if (!Array.isArray(activities) || activities.length === 0) {
+    activities = AREA_SEED.map(s => ({
+      id: s.id,
+      label: s.label,
+      areas: s.areas.map(name => ({id: uid(), name, assignee: "", notes: "", todos: []}))
+    }));
+    await saveKey("wedding-activity-areas", activities);
+  }
   timeline = (await loadKey("wedding-timeline")) || [];
   if (timeline.length === 0) {
     timeline = TIMELINE_SEED.map(s => ({id: uid(), ...s}));
