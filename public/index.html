@@ -128,6 +128,8 @@
     border: 1px solid var(--border);
     border-radius: 8px;
     padding: 8px 10px;
+    /* Matches button's min-height so inputs and buttons line up exactly. */
+    min-height: 36px;
     font-size: 14px;
     font-family: inherit;
     background: var(--white);
@@ -390,7 +392,14 @@
   }
   .muted { color: var(--ink-soft); font-size: 13px; }
   .strike { color: var(--ink-soft); text-decoration: line-through; }
-  .add-form { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+  /* align-items:center stops the button stretching to the row height while
+     the input keeps its intrinsic height, which left them visibly unequal. */
+  .add-form { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+  /* .modal-box input[type=text] carries a 16px bottom margin for the simple
+     input modal; inside an add-form row it just knocks the button out of line. */
+  .add-form input[type=text] { margin-bottom: 0; }
+  /* selects size from their own content box and come out 1px taller */
+  .add-form select { height: 36px; }
   .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
   table.data-table { border-collapse: collapse; width: 100%; min-width: 760px; font-size: 13.5px; }
   table.data-table th {
