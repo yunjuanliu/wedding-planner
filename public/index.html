@@ -1221,6 +1221,8 @@ function dueInfo(dueDate) {
 function dueBadgeHtml(dueDate) {
   const info = dueInfo(dueDate);
   if (!info) return '<span class="muted" style="font-size:11.5px;">No deadline</span>';
+  // On-time tasks need no badge - the date field already says when they are due.
+  if (info.kind === "ontime") return "";
   return `<span title="Due ${dueDate}" style="display:inline-block; white-space:nowrap; font-size:11.5px; font-weight:600;
     color:${info.color}; background:${info.bg}; border:1px solid ${info.border}; border-radius:10px; padding:2px 8px;">${info.label}</span>`;
 }
