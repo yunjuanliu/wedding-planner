@@ -1198,6 +1198,33 @@ let todoDragId = null;
 let todoDragSection = null;
 let todoJumpId = null;
 
+// Compares a task's due date with today so each row can show whether it is
+// overdue, due today, or still on time.
+function dueInfo(dueDate) {
+  if (!dueDate) return null;
+  const due = new Date(dueDate + "T00:00:00");
+  if (isNaN(due)) return null;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  due.setHours(0, 0, 0, 0);
+  const days = Math.round((due - today) / 86400000);
+  if (days < 0) {
+    const n = Math.abs(days);
+    return {kind: "overdue", label: `Overdue by ${n} day${n === 1 ? "" : "s"}`,
+            color: "#B3253C", bg: "#FCE9ED", border: "#F3C4CE"};
+  }
+  if (days === 0) {
+    return {kind: "today", label: "Due today", color: "#9A5B00", bg: "#FFF3DF", border: "#F3DCB4"};
+  }
+  return {kind: "ontime", label: days === 1 ? "On time · 1 day left" : `On time · ${days} days left`,
+          color: "#1F7A54", bg: "#E8F6EF", border: "#C6E7D8"};
+}
+function dueBadgeHtml(dueDate) {
+  const info = dueInfo(dueDate);
+  if (!info) return '<span class="muted" style="font-size:11.5px;">No deadline</span>';
+  return `<span title="Due ${dueDate}" style="display:inline-block; white-space:nowrap; font-size:11.5px; font-weight:600;
+    color:${info.color}; background:${info.bg}; border:1px solid ${info.border}; border-radius:10px; padding:2px 8px;">${info.label}</span>`;
+}
+
 function todoRowHtml(sectionId, item, draggable) {
   const checked = !!todoState[item.id];
   const assignee = item.assignee || "";
@@ -1208,12 +1235,16 @@ function todoRowHtml(sectionId, item, draggable) {
   const dragAttrs = draggable ? `draggable="true" data-todo-id="${item.id}" data-todo-section="${sectionId}"` : "";
   const handle = draggable ? `<span class="todo-handle" data-todo-handle title="Drag to move">⠿</span>` : "";
   const linked = (item.shopItemIds && item.shopItemIds.length > 0) || !!item.shopItemId;
-  return `<div class="item-row" ${dragAttrs}>
+  const info = checked ? null : dueInfo(item.dueDate);
+  const rowTint = info && info.kind === "overdue" ? "background:#FEF6F8; box-shadow:inset 3px 0 0 #D9455F;"
+                : info && info.kind === "today" ? "background:#FFFBF3; box-shadow:inset 3px 0 0 #E8A33D;" : "";
+  return `<div class="item-row" ${dragAttrs} style="${rowTint}">
         ${handle}
         <label style="display:flex; align-items:center; gap:10px; flex:1; min-width:160px; cursor:pointer;">
           <input type="checkbox" data-key="${item.id}" ${checked ? "checked" : ""} style="width:16px; height:16px;" />
           <span class="task-text ${checked ? "strike" : ""}" data-edit-section="${sectionId}" data-edit-item="${item.id}">${item.text}</span>
         </label>
+        ${checked ? "" : `<span style="flex:0 0 auto;">${dueBadgeHtml(item.dueDate)}</span>`}
         <input type="date" data-due-section="${sectionId}" data-due-item="${item.id}" value="${item.dueDate || ""}" style="flex:0 0 145px;" />
         <select data-assign-section="${sectionId}" data-assign-item="${item.id}" style="flex:0 0 150px;">${options}</select>
         <button class="icon-btn" data-remove-section="${sectionId}" data-remove-item="${item.id}" aria-label="Remove task">${TRASH_ICON}</button>
@@ -1235,7 +1266,30 @@ function renderTodo() {
     .map(([store, count]) => `${store} (${count})`)
     .join(" \u00b7 ");
 
+  const todayDate = new Date();
+  const todayLabel = todayDate.toLocaleDateString(undefined, {weekday: "long", month: "long", day: "numeric", year: "numeric"});
+  let overdueCount = 0, dueTodayCount = 0;
+  todoData.forEach(s => s.items.forEach(item => {
+    if (todoState[item.id]) return;
+    const i = dueInfo(item.dueDate);
+    if (!i) return;
+    if (i.kind === "overdue") overdueCount++;
+    else if (i.kind === "today") dueTodayCount++;
+  }));
+
   let html = `
+  <div class="card" style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+    <div class="row" style="gap:8px;">
+      <span style="color:var(--primary);">${icon("clock", 16)}</span>
+      <span style="font-weight:600;">Today</span>
+      <span class="muted">${todayLabel}</span>
+    </div>
+    <div class="row" style="gap:8px;">
+      ${overdueCount ? `<span style="font-size:12px; font-weight:600; color:#B3253C; background:#FCE9ED; border:1px solid #F3C4CE; border-radius:10px; padding:3px 10px;">${overdueCount} overdue</span>` : ""}
+      ${dueTodayCount ? `<span style="font-size:12px; font-weight:600; color:#9A5B00; background:#FFF3DF; border:1px solid #F3DCB4; border-radius:10px; padding:3px 10px;">${dueTodayCount} due today</span>` : ""}
+      ${!overdueCount && !dueTodayCount ? '<span class="muted" style="font-size:12.5px;">Nothing overdue or due today</span>' : ""}
+    </div>
+  </div>
   <div class="row" style="gap:14px; align-items:stretch; margin-bottom:16px; flex-wrap:wrap;">
     <button id="goto-shoplist-btn" style="flex:1; min-width:220px; text-align:left; border:none; cursor:pointer; padding:0; font-family:inherit;">
       <div class="hero-banner" style="height:100%; padding:18px 20px; display:flex; flex-direction:column; justify-content:center; gap:10px; box-sizing:border-box;">
