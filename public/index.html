@@ -29,14 +29,14 @@
     padding: 0;
     -webkit-font-smoothing: antialiased;
   }
-  /* 12-column grid with 80px side margins. Content blocks span all 12 by
+  /* 10-column grid with 80px side margins. Content blocks span all 10 by
      default; anything narrower can opt in with its own grid-column. */
   .wrap {
     max-width: none;
     margin: 0;
     padding: 0 80px 28px;
     display: grid;
-    grid-template-columns: repeat(12, minmax(0, 1fr));
+    grid-template-columns: repeat(10, minmax(0, 1fr));
     column-gap: 20px;
     align-content: start;
   }
