@@ -66,6 +66,8 @@
     border-bottom: 1px solid var(--border);
   }
   .app-header-inner { grid-column: 2 / 12; display: flex; align-items: center; gap: 14px; min-width: 0; }
+  .backup-btn { margin-left: auto; flex: 0 0 auto; white-space: nowrap; }
+  .backup-btn.saved { background: #E8F6EF; border-color: #C6E7D8; color: #1F7A54; }
   @media (max-width: 1024px) {
     .app-header { padding: 18px 40px 16px; column-gap: 16px; }
     .app-header-inner { grid-column: 1 / -1; }
@@ -452,6 +454,9 @@
       <path d="M149.67 159.041C145.959 155.33 142.247 155.33 142.247 159.041C142.247 162.753 149.67 168.938 149.67 168.938C149.67 168.938 157.093 162.753 157.093 159.041C157.093 155.33 153.381 155.33 149.67 159.041Z" fill="#8E5BC6"/>
     </svg>
     <h1>Wedding Planner</h1>
+    <button id="backup-btn" class="backup-btn" title="Download a copy of everything in this planner">
+      <span id="backup-btn-label">Back up</span>
+    </button>
   </div>
 </header>
 <div class="wrap">
@@ -1058,6 +1063,77 @@ document.querySelectorAll(".tab").forEach(t => {
   if (t.dataset.icon) t.insertAdjacentHTML("afterbegin", icon(t.dataset.icon, 16));
 });
 
+// One-click backup. Captures the server copy AND this browser's local copy
+// separately: when the two disagree - which is exactly how data was lost
+// before - keeping both means nothing is thrown away.
+async function downloadBackup() {
+  const backup = {
+    app: "wedding-planner",
+    exportedAt: new Date().toISOString(),
+    remoteReachable: false,
+    remote: {},
+    local: {}
+  };
+
+  try {
+    const r = await sbFetch(SUPABASE_URL + "/rest/v1/wedding_store?select=key,value", { headers: SB_HEADERS });
+    if (r.ok) {
+      (await r.json()).forEach(row => { backup.remote[row.key] = row.value; });
+      backup.remoteReachable = true;
+    }
+  } catch (e) {
+    // offline or project down - the local copy below is then the only record
+  }
+
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k || k.indexOf("wedding-") !== 0) continue;
+      try { backup.local[k] = JSON.parse(localStorage.getItem(k)); }
+      catch (e) { backup.local[k] = localStorage.getItem(k); }
+    }
+  } catch (e) {}
+
+  backup.summary = {
+    remoteKeys: Object.keys(backup.remote).length,
+    localKeys: Object.keys(backup.local).length,
+    guests: (backup.remote["wedding-guests"] || backup.local["wedding-guests"] || []).length,
+    vendors: ((backup.remote["wedding-budget"] || backup.local["wedding-budget"] || {}).vendors || []).length,
+    timeline: (backup.remote["wedding-timeline"] || backup.local["wedding-timeline"] || []).length
+  };
+
+  const stamp = new Date().toISOString().slice(0, 10);
+  const blob = new Blob([JSON.stringify(backup, null, 2)], {type: "application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `wedding-planner-backup-${stamp}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return backup;
+}
+
+document.getElementById("backup-btn").addEventListener("click", async (e) => {
+  const btn = e.currentTarget;
+  const label = document.getElementById("backup-btn-label");
+  btn.disabled = true;
+  label.textContent = "Saving…";
+  try {
+    const b = await downloadBackup();
+    label.textContent = b.remoteReachable ? "Saved ✓" : "Saved (local only) ✓";
+    btn.classList.add("saved");
+  } catch (err) {
+    label.textContent = "Failed — try again";
+  }
+  setTimeout(() => {
+    label.textContent = "Back up";
+    btn.classList.remove("saved");
+    btn.disabled = false;
+  }, 2600);
+});
+
 function uid() { return Math.random().toString(36).slice(2, 9); }
 const TRASH_ICON = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 6V4a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2"></path></svg>';
 function icon(name, size) {
@@ -1135,11 +1211,13 @@ async function saveKey(key, value) {
     localStorage.setItem(key + LS_TS, String(now));
   } catch (e) {}
   if (!remoteAvailable) return;
-  // Fire and forget so a slow network never blocks the UI.
+  // updated_at is DEFAULT now() with no update trigger, so an upsert leaves it
+  // at the original insert time. Send it explicitly - otherwise every remote
+  // row looks permanently older than local and stale copies overwrite good data.
   sbFetch(SUPABASE_URL + "/rest/v1/wedding_store", {
     method: "POST",
     headers: Object.assign({}, SB_HEADERS, {"Prefer": "resolution=merge-duplicates"}),
-    body: JSON.stringify({ key: key, value: value })
+    body: JSON.stringify({ key: key, value: value, updated_at: new Date(now).toISOString() })
   }).catch(() => { remoteAvailable = false; });
 }
 
