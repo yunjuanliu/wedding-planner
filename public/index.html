@@ -29,19 +29,23 @@
     padding: 0;
     -webkit-font-smoothing: antialiased;
   }
-  /* 10-column grid with 80px side margins. Content blocks span all 10 by
-     default; anything narrower can opt in with its own grid-column. */
+  /* 12-column grid with 80px side margins. Content occupies the middle 10
+     columns, leaving one empty column of breathing room each side. */
   .wrap {
     max-width: none;
     margin: 0;
     padding: 0 80px 28px;
     display: grid;
-    grid-template-columns: repeat(10, minmax(0, 1fr));
+    grid-template-columns: repeat(12, minmax(0, 1fr));
     column-gap: 20px;
     align-content: start;
   }
-  .wrap > * { grid-column: 1 / -1; min-width: 0; }
-  @media (max-width: 1024px) { .wrap { padding: 0 40px 24px; column-gap: 16px; } }
+  .wrap > * { grid-column: 2 / 12; min-width: 0; }
+  @media (max-width: 1024px) {
+    .wrap { padding: 0 40px 24px; column-gap: 16px; }
+    /* below this the spare columns cost more than they give back */
+    .wrap > * { grid-column: 1 / -1; }
+  }
   @media (max-width: 768px)  { .wrap { padding: 0 24px 20px; column-gap: 12px; } }
   h1 {
     font-family: "Inter", sans-serif;
@@ -50,20 +54,27 @@
     margin: 0;
     letter-spacing: -0.4px;
   }
+  /* The rule runs full-bleed, but the logo and title sit on the same grid
+     as the content so they always line up with it. */
   .app-header {
     width: 100%;
-    display: flex;
-    align-items: center;
-    gap: 14px;
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    column-gap: 20px;
     padding: 20px 80px 18px;
     margin-bottom: 22px;
     border-bottom: 1px solid var(--border);
   }
-  @media (max-width: 1024px) { .app-header { padding: 18px 40px 16px; } }
-  @media (max-width: 768px)  { .app-header { padding: 16px 24px 14px; } }
+  .app-header-inner { grid-column: 2 / 12; display: flex; align-items: center; gap: 14px; min-width: 0; }
+  @media (max-width: 1024px) {
+    .app-header { padding: 18px 40px 16px; column-gap: 16px; }
+    .app-header-inner { grid-column: 1 / -1; }
+  }
+  @media (max-width: 768px)  { .app-header { padding: 16px 24px 14px; column-gap: 12px; } }
   .app-logo { width: 38px; height: 38px; flex: 0 0 auto; display: block; }
   @media (max-width: 480px) {
-    .app-header { gap: 10px; padding: 16px 12px 14px; margin-bottom: 18px; }
+    .app-header { padding: 16px 12px 14px; margin-bottom: 18px; }
+    .app-header-inner { gap: 10px; }
     .app-logo { width: 32px; height: 32px; }
     h1 { font-size: 21px; }
   }
@@ -433,13 +444,15 @@
 </head>
 <body>
 <header class="app-header">
-  <svg class="app-logo" viewBox="0 0 300 300" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Y&amp;Y monogram">
-    <rect x="3.5" y="3.5" width="293" height="293" rx="146.5" stroke="#6E5FA6" stroke-width="7"/>
-    <path d="M153.234 89.5432C154.038 88.095 155.864 87.5735 157.313 88.3781C158.761 89.1829 159.282 91.009 158.478 92.4572L127.928 147.446V209.763C127.928 211.42 126.585 212.763 124.928 212.763C123.271 212.763 121.928 211.42 121.928 209.763V147.446L91.3781 92.4572C90.5735 91.009 91.095 89.1829 92.5432 88.3781C93.9914 87.5736 95.8176 88.0951 96.6223 89.5432L124.928 140.493L153.234 89.5432Z" fill="#6E5FA6"/>
-    <path d="M202.718 89.5432C203.523 88.0951 205.349 87.5736 206.797 88.3782C208.245 89.1829 208.767 91.0091 207.962 92.4573L177.412 147.447V209.763C177.412 211.42 176.069 212.763 174.412 212.763C172.756 212.763 171.412 211.42 171.412 209.763V147.447L140.863 92.4573C140.058 91.009 140.579 89.1829 142.028 88.3782C143.476 87.5736 145.302 88.0951 146.107 89.5432L174.412 140.493L202.718 89.5432Z" fill="#6E5FA6"/>
-    <path d="M149.67 159.041C145.959 155.33 142.247 155.33 142.247 159.041C142.247 162.753 149.67 168.938 149.67 168.938C149.67 168.938 157.093 162.753 157.093 159.041C157.093 155.33 153.381 155.33 149.67 159.041Z" fill="#8E5BC6"/>
-  </svg>
-  <h1>Wedding Planner</h1>
+  <div class="app-header-inner">
+    <svg class="app-logo" viewBox="0 0 300 300" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Y&amp;Y monogram">
+      <rect x="3.5" y="3.5" width="293" height="293" rx="146.5" stroke="#6E5FA6" stroke-width="7"/>
+      <path d="M153.234 89.5432C154.038 88.095 155.864 87.5735 157.313 88.3781C158.761 89.1829 159.282 91.009 158.478 92.4572L127.928 147.446V209.763C127.928 211.42 126.585 212.763 124.928 212.763C123.271 212.763 121.928 211.42 121.928 209.763V147.446L91.3781 92.4572C90.5735 91.009 91.095 89.1829 92.5432 88.3781C93.9914 87.5736 95.8176 88.0951 96.6223 89.5432L124.928 140.493L153.234 89.5432Z" fill="#6E5FA6"/>
+      <path d="M202.718 89.5432C203.523 88.0951 205.349 87.5736 206.797 88.3782C208.245 89.1829 208.767 91.0091 207.962 92.4573L177.412 147.447V209.763C177.412 211.42 176.069 212.763 174.412 212.763C172.756 212.763 171.412 211.42 171.412 209.763V147.447L140.863 92.4573C140.058 91.009 140.579 89.1829 142.028 88.3782C143.476 87.5736 145.302 88.0951 146.107 89.5432L174.412 140.493L202.718 89.5432Z" fill="#6E5FA6"/>
+      <path d="M149.67 159.041C145.959 155.33 142.247 155.33 142.247 159.041C142.247 162.753 149.67 168.938 149.67 168.938C149.67 168.938 157.093 162.753 157.093 159.041C157.093 155.33 153.381 155.33 149.67 159.041Z" fill="#8E5BC6"/>
+    </svg>
+    <h1>Wedding Planner</h1>
+  </div>
 </header>
 <div class="wrap">
 
