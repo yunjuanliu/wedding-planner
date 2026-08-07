@@ -138,6 +138,8 @@
   .progress-fill { height: 100%; background: var(--primary); border-radius: 5px; transition: width 0.3s; }
   .dash-duo { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
   @media (max-width: 640px) { .dash-duo { grid-template-columns: 1fr; } }
+  .dash-hero-row { display: grid; grid-template-columns: 2fr 1fr; gap: 14px; align-items: stretch; }
+  @media (max-width: 640px) { .dash-hero-row { grid-template-columns: 1fr; } }
   .ring-wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 6px 0 2px; }
   .ring { position: relative; width: 132px; height: 132px; flex: 0 0 auto; }
   .ring svg { width: 100%; height: 100%; transform: rotate(-90deg); display: block; }
@@ -220,6 +222,9 @@
   .modal-box h3 { margin: 0 0 14px; font-size: 16px; font-weight: 600; }
   .modal-box input[type=text] { width: 100%; margin-bottom: 16px; }
   .modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
+  #input-modal-title { font-size: 20px; margin-bottom: 20px; }
+  #input-modal-field { font-size: 19px; min-height: 52px; padding: 12px 14px; }
+  #input-modal .modal-actions button { font-size: 16px; padding: 11px 22px; }
   .field-label { display: block; margin: 14px 0 5px; font-size: 12px; color: var(--ink-soft); font-weight: 500; }
   textarea {
     border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px;
@@ -491,7 +496,7 @@
 </div>
 
 <div class="modal-overlay" id="area-modal">
-  <div class="modal-box" style="max-width:460px;">
+  <div class="modal-box" style="width:66.6667%; max-width:900px;">
     <div class="row" style="justify-content:space-between; align-items:flex-start; flex-wrap:nowrap; gap:10px; margin-bottom:2px;">
       <input type="text" id="area-modal-name" autocomplete="off" data-lpignore="true" data-1p-ignore
         style="flex:1; font-size:16px; font-weight:600;" />
@@ -503,7 +508,7 @@
     <select id="area-modal-assignee" style="width:100%;"></select>
 
     <label class="field-label" for="area-modal-notes">Notes</label>
-    <textarea id="area-modal-notes" rows="3" placeholder="Anything to remember about this area…"></textarea>
+    <textarea id="area-modal-notes" rows="6" placeholder="Anything to remember about this area…"></textarea>
 
     <div class="row" style="justify-content:space-between; margin:18px 0 6px;">
       <span class="section-title" style="margin:0;">To-do</span>
@@ -519,7 +524,7 @@
 </div>
 
 <div class="modal-overlay" id="input-modal">
-  <div class="modal-box" style="max-width:340px;">
+  <div class="modal-box" style="max-width:420px;">
     <h3 id="input-modal-title">Edit</h3>
     <input type="text" id="input-modal-field" />
     <div class="modal-actions">
@@ -555,7 +560,7 @@
       <label class="muted" style="font-size:12px;">Title</label>
       <input type="text" id="task-modal-title" style="margin-bottom:12px;" />
       <label class="muted" style="font-size:12px;">Notes</label>
-      <textarea id="task-modal-body" rows="3" style="width:100%; margin-bottom:12px; border:1px solid var(--border); border-radius:8px; padding:8px 10px; font-family:inherit; font-size:14px; resize:vertical;"></textarea>
+      <textarea id="task-modal-body" rows="6" style="width:100%; margin-bottom:12px; border:1px solid var(--border); border-radius:8px; padding:8px 10px; font-family:inherit; font-size:14px; resize:vertical;"></textarea>
       <div class="row" style="gap:10px; margin-bottom:12px;">
         <div style="flex:1;">
           <label class="muted" style="font-size:12px;">Due date</label>
@@ -1037,6 +1042,8 @@ document.getElementById("task-modal-save").addEventListener("click", async () =>
     item.dueDate = document.getElementById("task-modal-due").value;
     item.assignee = document.getElementById("task-modal-assignee").value;
     item.image = pendingImageData || "";
+    const newSectionId = moveTaskToDueSection(editingTask.sectionId, editingTask.itemId);
+    if (newSectionId !== editingTask.sectionId) todoJumpId = editingTask.itemId;
     saveKey("wedding-todo-items", todoData);
   }
   closeTaskEditModal();
@@ -1286,6 +1293,41 @@ function sectionDateStatus(sectionId) {
   if (today >= start && today <= end) return "current";
   if (today > end) return "past";
   return "upcoming";
+}
+// Finds which todo section's date range a given due date falls into, so a
+// task can be auto-filed under the right "weeks out" bucket.
+function sectionIdForDate(dateStr) {
+  if (!dateStr) return null;
+  const due = new Date(dateStr + "T00:00:00");
+  if (isNaN(due)) return null;
+  due.setHours(0, 0, 0, 0);
+  for (const id of Object.keys(SECTION_DAY_RANGES)) {
+    const range = SECTION_DAY_RANGES[id];
+    const start = new Date(WEDDING_DATE);
+    start.setDate(start.getDate() - range.startDaysBefore);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(WEDDING_DATE);
+    end.setDate(end.getDate() - range.endDaysBefore);
+    end.setHours(23, 59, 59, 999);
+    if (due >= start && due <= end) return id;
+  }
+  return null;
+}
+// Moves a task into the section matching its due date, if that's not
+// already where it lives. Returns the section id the task ends up in.
+function moveTaskToDueSection(fromSectionId, itemId) {
+  const fromSection = todoData.find(s => s.id === fromSectionId);
+  if (!fromSection) return fromSectionId;
+  const idx = fromSection.items.findIndex(i => i.id === itemId);
+  if (idx === -1) return fromSectionId;
+  const item = fromSection.items[idx];
+  const targetId = sectionIdForDate(item.dueDate);
+  if (!targetId || targetId === fromSectionId) return fromSectionId;
+  const toSection = todoData.find(s => s.id === targetId);
+  if (!toSection) return fromSectionId;
+  fromSection.items.splice(idx, 1);
+  toSection.items.push(item);
+  return targetId;
 }
 
 const TODO_DEFAULTS = [
@@ -1548,6 +1590,8 @@ function renderTodo() {
       const section = todoData.find(s => s.id === sectionId);
       const item = section.items.find(i => i.id === itemId);
       item.dueDate = e.target.value;
+      const newSectionId = moveTaskToDueSection(sectionId, itemId);
+      if (newSectionId !== sectionId) todoJumpId = itemId;
       renderTodo();
       saveKey("wedding-todo-items", todoData);
     });
@@ -1712,7 +1756,7 @@ function renderGuests() {
   const totalKids = guests.reduce((s,g) => s + (Number(g.kids)||0), 0);
   let html = `<div class="stat-row">
     <div class="stat"><div class="num">${guests.length}</div><div class="lbl">Households</div></div>
-    <div class="stat"><div class="num">${totalPeople}</div><div class="lbl">Total guests</div></div>
+    <div class="stat"><div class="num">${totalPeople}</div><div class="lbl">Total guests (incl. kids)</div></div>
     <div class="stat" style="background:#FBE9EF; border:1px solid #F3C8D6;"><div class="num" style="color:#C23568;">${totalKids}</div><div class="lbl">Kids</div></div>
     <div class="stat"><div class="num">${drivingCount}</div><div class="lbl">Driving</div></div>
     <div class="stat"><div class="num">${flyingCount}</div><div class="lbl">Flying in</div></div>
@@ -2813,8 +2857,6 @@ function renderDashboard() {
   const totalPeople = guests.reduce((s,g) => s + (Number(g.partySize)||0), 0);
   const drivingCount = guests.filter(g => g.transport === "Driving").length;
   const flyingCount = guests.filter(g => g.transport === "Flying").length;
-  const householdsWithTransport = guests.filter(g => g.transport).length;
-  const guestPct = guests.length ? Math.round(householdsWithTransport / guests.length * 100) : 0;
 
   const spent = budgetSpent();
   const shopTotal = shopList.length;
@@ -2823,7 +2865,6 @@ function renderDashboard() {
   const total = Number(budget.total) || 0;
   const pct = total ? Math.min(100, Math.round(spent / total * 100)) : 0;
   const remaining = total - spent;
-  const budgetPct = total ? pct : 0;
 
   let totalDone = 0, totalItems = 0;
   const upcoming = [];
@@ -2834,7 +2875,7 @@ function renderDashboard() {
   }));
   const todoPct = totalItems ? Math.round(totalDone/totalItems*100) : 0;
 
-  const overallPct = Math.round((guestPct + budgetPct + todoPct) / 3);
+  const overallPct = todoPct;
 
   const dashboardShopStores = {};
   shopList.forEach(r => { const k = r.store || ""; if (k) dashboardShopStores[k] = (dashboardShopStores[k]||0) + 1; });
@@ -2849,29 +2890,24 @@ function renderDashboard() {
   const weddingDateLabel = WEDDING_DATE.toLocaleDateString(undefined, {weekday:"long", month:"long", day:"numeric", year:"numeric"});
 
   let html = `
-  <div class="hero-banner">
-    <div class="hero-days">${daysLeft >= 0 ? daysLeft + " days to go" : "The big day has passed \u2014 congrats!"}</div>
-    <div class="hero-sub">${weddingDateLabel}</div>
-  </div>
-
-  <div class="card">
-    <div class="row" style="justify-content:space-between; margin-bottom:8px;">
-      <p class="section-title" style="margin:0;">Overall wedding readiness</p>
-      <span style="font-weight:700; color:var(--primary); font-size:15px;">${overallPct}%</span>
+  <div class="dash-hero-row" style="margin-bottom:16px;">
+    <div class="hero-banner" style="margin-bottom:0;">
+      <div class="hero-days">${daysLeft >= 0 ? daysLeft + " days to go" : "The big day has passed \u2014 congrats!"}</div>
+      <div class="hero-sub">${weddingDateLabel}</div>
     </div>
-    <div class="progress-bar" style="height:10px; margin-bottom:14px;"><div class="progress-fill" style="width:${overallPct}%;"></div></div>
-    <div class="row" style="gap:20px; flex-wrap:wrap;">
-      <div style="flex:1; min-width:130px;">
-        <div class="row" style="justify-content:space-between; margin-bottom:4px;"><span class="muted">Guest travel set</span><span class="muted">${guestPct}%</span></div>
-        <div class="progress-bar" style="height:5px;"><div class="progress-fill" style="width:${guestPct}%;"></div></div>
-      </div>
-      <div style="flex:1; min-width:130px;">
-        <div class="row" style="justify-content:space-between; margin-bottom:4px;"><span class="muted">Budget used</span><span class="muted">${total ? budgetPct + "%" : "No budget set"}</span></div>
-        <div class="progress-bar" style="height:5px;"><div class="progress-fill" style="width:${budgetPct}%; ${remaining < 0 ? "background:#D9455F;" : ""}"></div></div>
-      </div>
-      <div style="flex:1; min-width:130px;">
-        <div class="row" style="justify-content:space-between; margin-bottom:4px;"><span class="muted">To-dos done</span><span class="muted">${todoPct}%</span></div>
-        <div class="progress-bar" style="height:5px;"><div class="progress-fill" style="width:${todoPct}%;"></div></div>
+
+    <div class="card" style="margin-bottom:0; display:flex; flex-direction:column;">
+      <p class="section-title" style="margin:0 0 4px;">Overall wedding readiness</p>
+      <div class="ring-wrap" style="flex:1; justify-content:center;">
+        ${progressRing({
+          pct: overallPct,
+          centerText: overallPct + "%",
+          centerSub: "complete",
+          title: "Overall wedding readiness"
+        })}
+        <div class="ring-legend">
+          <div class="ring-main">${totalDone} of ${totalItems} to-dos done</div>
+        </div>
       </div>
     </div>
   </div>
