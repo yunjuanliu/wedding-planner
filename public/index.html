@@ -300,20 +300,33 @@
     font-family: inherit;
   }
   .link-btn:hover { text-decoration: underline; }
-  .guest-row {
+  /* Household row and the person rows beneath it share one column track so
+     names and dish pickers line up down the page. */
+  .guest-row, .person-row {
     display: grid;
-    grid-template-columns: minmax(130px, 2fr) 36px 110px 100px minmax(110px, 1fr) 32px;
+    grid-template-columns: minmax(130px, 2fr) 36px 110px 100px minmax(210px, 1.5fr) minmax(110px, 1fr) 32px;
     align-items: center;
     gap: 10px;
-    padding: 10px 0;
-    border-top: 1px solid var(--border);
     text-align: left;
   }
-  .guest-row:first-child { border-top: none; }
-  .guest-row > * { text-align: left; justify-self: start; }
-  .guest-row select { width: 100%; }
+  .guest-row { padding: 10px 0 8px; }
+  .guest-block { border-top: 1px solid var(--border); }
+  .guest-block:first-child { border-top: none; }
+  .guest-row > *, .person-row > * { text-align: left; justify-self: start; }
+  .guest-row select, .person-row select { width: 100%; }
+  .guest-dishes { grid-column: 5; display: flex; gap: 6px; width: 100%; min-width: 0; }
+  .guest-dishes select { flex: 1 1 0; min-width: 0; }
+  .person-row { padding: 4px 0; }
+  .person-row > [data-person-name] { grid-column: 1 / 5; width: 100%; }
+  .person-row > [data-action=remove-person] { grid-column: 7; }
+  .person-add-row { padding: 2px 0 10px; }
+  .person-add-row > .link-btn { grid-column: 1 / 5; font-size: 12.5px; }
+  /* The add-note button is clutter on the many rows that have no note, but
+     hiding it outright would leave no way to add one. */
+  .dietary-add { opacity: 0; transition: opacity 0.12s; }
+  .guest-block:hover .dietary-add, .dietary-add:focus { opacity: 1; }
   #g-list { overflow-x: auto; }
-  #g-list .guest-row { min-width: 560px; }
+  #g-list .guest-row, #g-list .person-row { min-width: 760px; }
   .tl-card {
     position: relative;
     transition: box-shadow 0.15s, opacity 0.15s;
@@ -1974,8 +1987,67 @@ const GUEST_SEED = [
 let guests = [];
 
 let guestSearch = "";
+// PLACEHOLDER MENU - replace this list with the real dishes. Nothing else
+// needs to change: a saved pick that is no longer on the list is still shown
+// (see dishOptionsHtml), so swapping these out cannot silently drop a choice.
+const MENU_DISHES = [
+  "Dish 1 (placeholder)",
+  "Dish 2 (placeholder)",
+  "Dish 3 (placeholder)",
+  "Dish 4 (placeholder)",
+];
+const DISHES_PER_GUEST = 2;
+
+function dishOptionsHtml(current) {
+  const opts = MENU_DISHES.slice();
+  // Keep a choice that is not on the current menu rather than resetting it.
+  if (current && opts.indexOf(current) === -1) opts.push(current);
+  return ['<option value="">—</option>'].concat(
+    opts.map(d => `<option value="${esc(d)}" ${d === current ? "selected" : ""}>${esc(d)}</option>`)
+  ).join("");
+}
+
+// plusOne was free text with several shapes: "A, B, C", "A (+ B, C)", "A and B".
+function parsePlusOneNames(raw) {
+  if (!raw) return [];
+  const extras = [];
+  const stripped = String(raw).replace(/\(([^)]*)\)/g, (m, inner) => {
+    extras.push(inner.replace(/^\s*\+\s*/, ""));
+    return "";
+  });
+  const out = [];
+  (stripped + "," + extras.join(",")).split(/[,;]+/).forEach(part => {
+    part.split(/\s+and\s+/i).forEach(n => {
+      const t = n.trim();
+      if (t) out.push(t);
+    });
+  });
+  return out;
+}
+
+function blankDishes() { return new Array(DISHES_PER_GUEST).fill(""); }
+
+// Builds the per-person rows once, from the old free-text field. The original
+// plusOne string is deliberately left in place: if a name parsed wrongly, the
+// text it came from is still on record.
+function ensureGuestPeople(g) {
+  if (!Array.isArray(g.dishes)) g.dishes = blankDishes();
+  while (g.dishes.length < DISHES_PER_GUEST) g.dishes.push("");
+  if (Array.isArray(g.people)) {
+    g.people.forEach(pr => {
+      if (!Array.isArray(pr.dishes)) pr.dishes = blankDishes();
+      while (pr.dishes.length < DISHES_PER_GUEST) pr.dishes.push("");
+    });
+    return false;
+  }
+  g.people = parsePlusOneNames(g.plusOne).map(name => ({id: uid(), name, dishes: blankDishes()}));
+  return true;
+}
+
 function renderGuests() {
   const p = document.getElementById("panel-guests");
+  // Persist the one-time split of plusOne into rows, so it happens once.
+  if (guests.map(ensureGuestPeople).some(Boolean)) saveKey("wedding-guests", guests);
   const totalPeople = guests.reduce((s,g) => s + (Number(g.partySize)||0), 0);
   const drivingCount = guests.filter(g => g.transport === "Driving").length;
   const flyingCount = guests.filter(g => g.transport === "Flying").length;
@@ -2000,7 +2072,8 @@ function renderGuests() {
 
   const q = guestSearch.trim().toLowerCase();
   const visible = q ? guests.filter(g =>
-    g.name.toLowerCase().includes(q) || (g.plusOne || "").toLowerCase().includes(q)
+    g.name.toLowerCase().includes(q) ||
+    (g.people || []).some(pr => (pr.name || "").toLowerCase().includes(q))
   ) : guests;
 
   const list = document.getElementById("g-list");
@@ -2008,8 +2081,9 @@ function renderGuests() {
     list.innerHTML = `<p class="muted">${guests.length === 0 ? "No households yet. Add one above." : "No guests match your search."}</p>`;
   } else {
     list.innerHTML = visible.map(g => `
+      <div class="guest-block">
       <div class="guest-row">
-        <span style="font-weight:600;">${g.name}</span>
+        <span style="font-weight:600;">${esc(g.name)}</span>
         <span class="muted" data-id="${g.id}" data-action="edit-partysize" style="cursor:pointer; border-bottom:1px dashed transparent;" title="Click to edit">${g.partySize}</span>
         <select data-id="${g.id}" data-field="transport">
           <option value="" ${!g.transport?"selected":""}>—</option>
@@ -2019,13 +2093,26 @@ function renderGuests() {
         ${Number(g.kids) > 0
           ? `<span data-id="${g.id}" data-action="edit-kids" style="cursor:pointer; background:#FBE9EF; color:#C23568; border-radius:12px; padding:3px 9px; font-size:12px; font-weight:600; justify-self:start;" title="Click to edit">${g.kids} kid${g.kids > 1 ? "s" : ""}</span>`
           : `<button class="icon-btn" data-id="${g.id}" data-action="add-kids">+ Kids</button>`}
-        ${g.dietary ? `<span class="muted" data-id="${g.id}" data-action="edit-dietary" style="cursor:pointer; border-bottom:1px dashed transparent;" title="Click to edit">${g.dietary}</span>`
-                     : `<button class="icon-btn" data-id="${g.id}" data-action="add-dietary">+ Dietary note</button>`}
+        <div class="guest-dishes">
+          ${g.dishes.map((d, i) => `<select data-id="${g.id}" data-dish="${i}" title="Dish ${i+1}">${dishOptionsHtml(d)}</select>`).join("")}
+        </div>
+        ${g.dietary
+          ? `<span class="muted" data-id="${g.id}" data-action="edit-dietary" style="cursor:pointer; border-bottom:1px dashed transparent;" title="Click to edit">${esc(g.dietary)}</span>`
+          : `<button class="icon-btn dietary-add" data-id="${g.id}" data-action="add-dietary" title="Add dietary note">+ Dietary</button>`}
         <button class="icon-btn" data-id="${g.id}" data-action="remove" aria-label="Remove household">${TRASH_ICON}</button>
-        ${g.plusOne ? `<div class="muted" style="grid-column: 1 / -1; display:flex; align-items:center; gap:6px;">
-          <span data-id="${g.id}" data-action="edit-plusone" style="cursor:pointer;" title="Click to edit">With: ${g.plusOne}</span>
-          <button data-id="${g.id}" data-action="remove-plusone" aria-label="Remove plus one" style="border:none; background:none; padding:0; color:var(--ink-soft); cursor:pointer; font-size:14px; line-height:1;">×</button>
-        </div>` : ""}
+      </div>
+      ${g.people.map(pr => `
+        <div class="person-row">
+          <input type="text" data-gid="${g.id}" data-pid="${pr.id}" data-person-name value="${esc(pr.name)}"
+            placeholder="Guest name" autocomplete="off" data-lpignore="true" data-1p-ignore />
+          <div class="guest-dishes">
+            ${pr.dishes.map((d, i) => `<select data-gid="${g.id}" data-pid="${pr.id}" data-person-dish="${i}" title="Dish ${i+1}">${dishOptionsHtml(d)}</select>`).join("")}
+          </div>
+          <button class="icon-btn" data-gid="${g.id}" data-pid="${pr.id}" data-action="remove-person" aria-label="Remove ${esc(pr.name) || "guest"}">${TRASH_ICON}</button>
+        </div>`).join("")}
+      <div class="person-row person-add-row">
+        <button class="link-btn" data-id="${g.id}" data-action="add-person">+ Add guest</button>
+      </div>
       </div>`).join("");
   }
 
@@ -2085,22 +2172,52 @@ function renderGuests() {
       }, "number");
     });
   });
-  list.querySelectorAll("[data-action=edit-plusone]").forEach(el => {
-    el.addEventListener("click", (e) => {
-      const g = guests.find(x => x.id === e.currentTarget.dataset.id);
-      if (!g) return;
-      openInputModal("Plus one(s)", g.plusOne || "", async (value) => {
-        g.plusOne = value.trim();
-        await saveKey("wedding-guests", guests);
-        renderGuests();
-      });
+  function findPerson(gid, pid) {
+    const g = guests.find(x => x.id === gid);
+    const person = g && (g.people || []).find(x => x.id === pid);
+    return person ? {g, person} : null;
+  }
+  // Typing a name re-rendered on every change and stole focus, so save in place.
+  list.querySelectorAll("[data-person-name]").forEach(inp => {
+    inp.addEventListener("change", async (e) => {
+      const found = findPerson(e.currentTarget.dataset.gid, e.currentTarget.dataset.pid);
+      if (!found) return;
+      found.person.name = e.currentTarget.value.trim();
+      await saveKey("wedding-guests", guests);
     });
   });
-  list.querySelectorAll("[data-action=remove-plusone]").forEach(el => {
-    el.addEventListener("click", async (e) => {
+  list.querySelectorAll("[data-person-dish]").forEach(sel => {
+    sel.addEventListener("change", async (e) => {
+      const found = findPerson(e.currentTarget.dataset.gid, e.currentTarget.dataset.pid);
+      if (!found) return;
+      found.person.dishes[Number(e.currentTarget.dataset.personDish)] = e.currentTarget.value;
+      await saveKey("wedding-guests", guests);
+    });
+  });
+  list.querySelectorAll("[data-dish]").forEach(sel => {
+    sel.addEventListener("change", async (e) => {
       const g = guests.find(x => x.id === e.currentTarget.dataset.id);
       if (!g) return;
-      g.plusOne = "";
+      g.dishes[Number(e.currentTarget.dataset.dish)] = e.currentTarget.value;
+      await saveKey("wedding-guests", guests);
+    });
+  });
+  list.querySelectorAll("[data-action=add-person]").forEach(btn => {
+    btn.addEventListener("click", async (e) => {
+      const g = guests.find(x => x.id === e.currentTarget.dataset.id);
+      if (!g) return;
+      g.people.push({id: uid(), name: "", dishes: blankDishes()});
+      await saveKey("wedding-guests", guests);
+      renderGuests();
+      const rows = document.querySelectorAll(`[data-gid="${g.id}"][data-person-name]`);
+      if (rows.length) rows[rows.length - 1].focus();
+    });
+  });
+  list.querySelectorAll("[data-action=remove-person]").forEach(btn => {
+    btn.addEventListener("click", async (e) => {
+      const g = guests.find(x => x.id === e.currentTarget.dataset.gid);
+      if (!g) return;
+      g.people = g.people.filter(x => x.id !== e.currentTarget.dataset.pid);
       await saveKey("wedding-guests", guests);
       renderGuests();
     });
