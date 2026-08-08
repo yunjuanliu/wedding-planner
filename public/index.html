@@ -234,6 +234,28 @@
   textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
   .area-name-link { cursor: pointer; font-weight: 600; }
   .area-name-link:hover { color: var(--primary); text-decoration: underline; }
+  .area-cover-banner {
+    position: relative; width: 100%; height: 220px; overflow: hidden;
+    background: var(--primary-light); cursor: pointer; flex: 0 0 auto;
+  }
+  .area-cover-banner img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .area-cover-banner-placeholder {
+    position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 8px; color: var(--primary); font-size: 13px; font-weight: 500;
+  }
+  .area-cover-banner:hover .area-cover-banner-placeholder { color: var(--primary-hover); }
+  .area-cover-banner-remove {
+    position: absolute; top: 12px; right: 12px; width: 28px; height: 28px;
+    min-height: 28px; padding: 0; border-radius: 50%; background: rgba(29,27,41,0.55);
+    border: none; color: var(--white); display: flex; align-items: center; justify-content: center;
+  }
+  .area-cover-banner-remove:hover { background: rgba(29,27,41,0.75); color: var(--white); }
+  .icon-plus-btn {
+    width: 32px; height: 32px; min-height: 32px; padding: 0; flex: 0 0 auto;
+    border-radius: 8px; background: var(--primary); color: var(--white); border-color: var(--primary);
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .icon-plus-btn:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
   .task-text { cursor: pointer; border-bottom: 1px dashed transparent; }
   .task-text:hover { border-bottom-color: var(--primary); color: var(--primary); }
   .switch {
@@ -496,19 +518,67 @@
 </div>
 
 <div class="modal-overlay" id="area-modal">
-  <div class="modal-box" style="width:66.6667%; max-width:900px;">
+  <div class="modal-box" style="width:66.6667%; max-width:900px; padding:0; overflow:hidden;">
+    <div class="area-cover-banner" id="area-modal-cover-banner" title="Add a cover image">
+      <img id="area-modal-cover-img" style="display:none;" alt="Cover image" />
+      <div id="area-modal-cover-placeholder" class="area-cover-banner-placeholder">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+        <span>Add a cover image</span>
+      </div>
+      <button class="icon-btn area-cover-banner-remove" id="area-modal-cover-remove" style="display:none;" aria-label="Remove cover image" title="Remove cover image">&#10005;</button>
+    </div>
+    <input type="file" id="area-modal-cover-input" accept="image/*" style="display:none;" />
+
+    <div style="padding:22px;">
     <div class="row" style="justify-content:space-between; align-items:flex-start; flex-wrap:nowrap; gap:10px; margin-bottom:2px;">
       <input type="text" id="area-modal-name" autocomplete="off" data-lpignore="true" data-1p-ignore
         style="flex:1; font-size:16px; font-weight:600;" />
-      <button class="icon-btn" id="area-modal-close" aria-label="Close" title="Close">&#10005;</button>
     </div>
-    <p class="muted" id="area-modal-section" style="margin:0 0 12px;"></p>
+    <p class="muted" id="area-modal-section" style="margin:0 0 10px;"></p>
+    <button class="link-btn" id="area-modal-export" style="display:inline-flex; align-items:center; gap:6px; margin-bottom:14px;" aria-label="Download Guideline" title="Download Guideline">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+      Download Guideline
+    </button>
 
     <label class="field-label" for="area-modal-assignee">Assignee</label>
     <select id="area-modal-assignee" style="width:100%;"></select>
 
-    <label class="field-label" for="area-modal-notes">Notes</label>
-    <textarea id="area-modal-notes" rows="6" placeholder="Anything to remember about this area…"></textarea>
+    <label class="field-label" for="area-modal-notes">User experience notes</label>
+    <textarea id="area-modal-notes" rows="6" placeholder="What should this area feel like for guests?"></textarea>
+
+    <div class="row" style="align-items:flex-start; gap:12px; margin-top:0;">
+      <div style="flex:1; min-width:140px;">
+        <label class="field-label" for="area-modal-table-type">Table type</label>
+        <select id="area-modal-table-type" style="width:100%;">
+          <option value="">—</option>
+          <option value="6 foot Table">6 foot Table</option>
+          <option value="8 foot Table">8 foot Table</option>
+          <option value="4 foot table">4 foot table</option>
+          <option value="curved table">curved table</option>
+          <option value="Round 30&quot; H">Round 30" H</option>
+          <option value="Round 42&quot; H">Round 42" H</option>
+        </select>
+      </div>
+      <div style="flex:1; min-width:100px;">
+        <label class="field-label" for="area-modal-table-qty">Quantity</label>
+        <select id="area-modal-table-qty" style="width:100%;"></select>
+      </div>
+    </div>
+
+    <div class="row" style="justify-content:space-between; margin:18px 0 6px;">
+      <span class="section-title" style="margin:0;">Material checklist</span>
+      <button class="icon-plus-btn" id="area-modal-material-add" aria-label="Add material" title="Add material">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+      </button>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table" style="min-width:380px;">
+        <thead><tr>
+          <th style="width:34px;"></th><th>Item Name</th><th>Quality</th><th style="width:36px;"></th>
+        </tr></thead>
+        <tbody id="area-modal-materials"></tbody>
+      </table>
+    </div>
 
     <div class="row" style="justify-content:space-between; margin:18px 0 6px;">
       <span class="section-title" style="margin:0;">To-do</span>
@@ -518,7 +588,25 @@
     <div class="add-form" style="margin-bottom:0;">
       <input type="text" id="area-modal-todo-new" placeholder="Add a to-do" autocomplete="off"
         data-lpignore="true" data-1p-ignore style="flex:1; min-width:140px;" />
-      <button class="primary" id="area-modal-todo-add">Add</button>
+      <button class="icon-plus-btn" id="area-modal-todo-add" aria-label="Add to-do" title="Add to-do">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+      </button>
+    </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="table-summary-modal">
+  <div class="modal-box" style="width:50%; max-width:480px;">
+    <div class="row" style="justify-content:space-between; align-items:center; margin-bottom:14px;">
+      <h3 style="margin:0;">Table Summary</h3>
+      <button class="icon-btn" id="table-summary-close" aria-label="Close" title="Close">&#10005;</button>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table" style="min-width:0;">
+        <thead><tr><th>Table type</th><th style="width:110px; text-align:right;">Quantity</th></tr></thead>
+        <tbody id="table-summary-body"></tbody>
+      </table>
     </div>
   </div>
 </div>
@@ -609,6 +697,7 @@
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/docx@9.7.1/dist/index.iife.min.js"></script>
 <script>
 let inputModalCallback = null;
 function openInputModal(title, initialValue, onSave, inputType) {
@@ -1085,7 +1174,12 @@ async function downloadBackup() {
   try {
     const r = await sbFetch(SUPABASE_URL + "/rest/v1/wedding_store?select=key,value", { headers: SB_HEADERS });
     if (r.ok) {
-      (await r.json()).forEach(row => { backup.remote[row.key] = row.value; });
+      // Skip the dated snapshots: they are copies of these same rows, and with
+      // cover images embedded they would dwarf the file being downloaded.
+      (await r.json()).forEach(row => {
+        if (row.key.indexOf("snapshot::") === 0) return;
+        backup.remote[row.key] = row.value;
+      });
       backup.remoteReachable = true;
     }
   } catch (e) {
@@ -1167,7 +1261,9 @@ const SB_HEADERS = {
 
 // If the Supabase project is unreachable, requests must fail fast: the app
 // used to sit on a blank screen until the browser gave up on each one.
-const SB_TIMEOUT_MS = 3000;
+// 3s was tight enough that a phone on a slow connection looked like an empty
+// account, which is how a real to-do list once got replaced by defaults.
+const SB_TIMEOUT_MS = 10000;
 let remoteAvailable = true;
 async function sbFetch(url, options) {
   const ctrl = new AbortController();
@@ -1184,6 +1280,11 @@ async function sbFetch(url, options) {
 // from "stale copy from weeks ago", instead of silently picking one.
 const LS_TS = "::savedAt";
 let storeCache = null;
+// A failed fetch leaves storeCache empty, which is indistinguishable from a
+// genuinely empty account. Seeding defaults on that guess once overwrote a
+// real to-do list, so callers must check this before treating "no rows" as
+// "new user" - see storeIsTrustworthy().
+let storeLoadedOk = false;
 async function loadStore() {
   if (storeCache) return storeCache;
   storeCache = {};
@@ -1193,12 +1294,33 @@ async function loadStore() {
       (await r.json()).forEach(row => {
         storeCache[row.key] = { value: row.value, ts: Date.parse(row.updated_at) || 0 };
       });
+      storeLoadedOk = true;
     } else remoteAvailable = false;
   } catch (e) {
     // One failure is enough: stop paying the timeout on every later save.
     remoteAvailable = false;
   }
   return storeCache;
+}
+
+// Only true once we have actually heard back from the server. Seeding defaults
+// while this is false would write made-up data over whatever is really stored.
+async function storeIsTrustworthy() {
+  await loadStore();
+  return storeLoadedOk;
+}
+
+// Silence was the dangerous part: the app looked normal while showing defaults.
+// Say plainly that this is not the real data so nobody types into a blank copy.
+function showOfflineBanner() {
+  if (document.getElementById("offline-banner")) return;
+  const bar = document.createElement("div");
+  bar.id = "offline-banner";
+  bar.style.cssText = "background:#FDECEF; color:#8A1C36; border-bottom:1px solid #F5C2CE;" +
+    "padding:10px 20px; font-size:13.5px; font-weight:500; text-align:center;";
+  bar.textContent = "Can't reach the server — showing your last saved copy on this device. " +
+    "Avoid editing until this message disappears, then reload.";
+  document.body.insertBefore(bar, document.body.firstChild);
 }
 
 function readLocal(key) {
@@ -1209,6 +1331,55 @@ function readLocal(key) {
   } catch (e) { return null; }
 }
 
+// Keys whose latest value made it into localStorage but not onto the server.
+const unsavedKeys = new Set();
+function updateSaveStatus() {
+  let el = document.getElementById("save-status");
+  if (unsavedKeys.size === 0) { if (el) el.remove(); return; }
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "save-status";
+    el.style.cssText = "position:fixed; left:50%; bottom:18px; transform:translateX(-50%);" +
+      "background:#FDECEF; color:#8A1C36; border:1px solid #F5C2CE; border-radius:10px;" +
+      "padding:9px 16px; font-size:13px; font-weight:500; z-index:400;" +
+      "box-shadow:0 4px 14px rgba(29,27,41,0.14);";
+    document.body.appendChild(el);
+  }
+  el.textContent = "Not saved to the server yet (" + unsavedKeys.size +
+    ") — keep this tab open; retrying…";
+}
+
+// A save used to be fire-and-forget, and only network exceptions were caught -
+// so an error status counted as success and the app looked saved when it wasn't.
+// Check the response, retry, and say so on screen when it still fails.
+async function pushToServer(key, value, ts, attempt) {
+  attempt = attempt || 0;
+  try {
+    // updated_at is DEFAULT now() with no update trigger, so an upsert leaves it
+    // at the original insert time. Send it explicitly - otherwise every remote
+    // row looks permanently older than local and stale copies overwrite good data.
+    const r = await sbFetch(SUPABASE_URL + "/rest/v1/wedding_store", {
+      method: "POST",
+      headers: Object.assign({}, SB_HEADERS, {"Prefer": "resolution=merge-duplicates"}),
+      body: JSON.stringify({ key: key, value: value, updated_at: new Date(ts).toISOString() })
+    });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    remoteAvailable = true;
+    unsavedKeys.delete(key);
+    updateSaveStatus();
+    return true;
+  } catch (e) {
+    if (attempt < 3) {
+      await new Promise(res => setTimeout(res, 800 * Math.pow(2, attempt)));
+      return pushToServer(key, value, ts, attempt + 1);
+    }
+    // One failure no longer condemns the whole session: later saves still try.
+    unsavedKeys.add(key);
+    updateSaveStatus();
+    return false;
+  }
+}
+
 async function saveKey(key, value) {
   const store = await loadStore();
   const now = Date.now();
@@ -1217,15 +1388,70 @@ async function saveKey(key, value) {
     localStorage.setItem(key, JSON.stringify(value));
     localStorage.setItem(key + LS_TS, String(now));
   } catch (e) {}
-  if (!remoteAvailable) return;
-  // updated_at is DEFAULT now() with no update trigger, so an upsert leaves it
-  // at the original insert time. Send it explicitly - otherwise every remote
-  // row looks permanently older than local and stale copies overwrite good data.
-  sbFetch(SUPABASE_URL + "/rest/v1/wedding_store", {
-    method: "POST",
-    headers: Object.assign({}, SB_HEADERS, {"Prefer": "resolution=merge-duplicates"}),
-    body: JSON.stringify({ key: key, value: value, updated_at: new Date(now).toISOString() })
-  }).catch(() => { remoteAvailable = false; });
+  // Deliberately not awaited: the local write above already made the edit safe
+  // on this device, and blocking every edit on a round trip made the UI stall.
+  pushToServer(key, value, now);
+}
+
+// Closing the tab with edits that never reached the server is how work goes
+// missing on a device you then stop using.
+window.addEventListener("beforeunload", (e) => {
+  if (unsavedKeys.size === 0) return;
+  e.preventDefault();
+  e.returnValue = "";
+});
+
+// Dated copies of everything, kept server-side. Recovering a bad overwrite used
+// to depend on someone having manually downloaded a backup that day.
+const SNAPSHOT_PREFIX = "snapshot::";
+const SNAPSHOT_SLOTS = 10;
+function snapshotSlotKey(i) { return SNAPSHOT_PREFIX + "slot-" + i; }
+
+// A fixed ring of slots, recycled oldest-first. Dated keys would have needed
+// DELETE to prune, and DELETE answers 204 here while row-level security quietly
+// keeps the row - so the table would have grown without bound.
+async function writeDailySnapshotIfNeeded() {
+  // Snapshotting a copy we could not verify would just preserve the wrong data.
+  if (!storeLoadedOk) return false;
+  const store = await loadStore();
+  const today = new Date().toISOString().slice(0, 10);
+
+  const takenAts = [];
+  for (let i = 0; i < SNAPSHOT_SLOTS; i++) {
+    const row = store[snapshotSlotKey(i)];
+    takenAts.push((row && row.value && row.value.takenAt) || null);
+  }
+  if (takenAts.some(t => t && t.slice(0, 10) === today)) return false;
+
+  let target = takenAts.indexOf(null);
+  if (target === -1) {
+    target = 0;
+    for (let i = 1; i < SNAPSHOT_SLOTS; i++) {
+      if (takenAts[i] < takenAts[target]) target = i;
+    }
+  }
+
+  const data = {};
+  Object.keys(store).forEach(k => {
+    if (k.indexOf(SNAPSHOT_PREFIX) === 0) return;
+    data[k] = store[k].value;
+  });
+  if (Object.keys(data).length === 0) return false;
+
+  const key = snapshotSlotKey(target);
+  const body = { takenAt: new Date().toISOString(), data: data };
+  try {
+    // Deliberately not pushToServer: a snapshot is housekeeping, so a failure
+    // must not raise the "your edits are unsaved" warning.
+    const r = await sbFetch(SUPABASE_URL + "/rest/v1/wedding_store", {
+      method: "POST",
+      headers: Object.assign({}, SB_HEADERS, {"Prefer": "resolution=merge-duplicates"}),
+      body: JSON.stringify({ key: key, value: body, updated_at: new Date().toISOString() })
+    });
+    if (!r.ok) return false;
+    store[key] = { value: body, ts: Date.now() };
+  } catch (e) { return false; }
+  return true;
 }
 
 async function loadKey(key) {
@@ -1903,6 +2129,15 @@ const AREA_SEED = [
 let activities = [];
 let openAreaRef = null;
 
+const TABLE_TYPE_OPTIONS = ["6 foot Table", "8 foot Table", "4 foot table", "curved table", "Round 30\" H", "Round 42\" H"];
+function tableQtyOptionsHtml(current) {
+  let html = '<option value="">—</option>';
+  for (let i = 1; i <= 20; i++) {
+    html += `<option value="${i}" ${String(current) === String(i) ? "selected" : ""}>${i}</option>`;
+  }
+  return html;
+}
+
 function findArea(sectionId, areaId) {
   const section = activities.find(s => s.id === sectionId);
   if (!section) return null;
@@ -1950,7 +2185,10 @@ function renderActivities() {
     totalDone += c.done; totalTodos += c.total;
   }));
 
-  let html = `<div class="stat-row">
+  let html = `<div class="row" style="justify-content:flex-end; margin-bottom:12px;">
+    <button id="table-summary-btn">Table Summary</button>
+  </div>
+  <div class="stat-row">
     <div class="stat"><div class="num">${totalAreas}</div><div class="lbl">Areas</div></div>
     <div class="stat"><div class="num">${totalDone} / ${totalTodos}</div><div class="lbl">Area to-dos done</div></div>
     <div class="stat" style="flex:2; display:flex; flex-direction:column; justify-content:center;">
@@ -2040,6 +2278,7 @@ function renderActivities() {
       if (e.key === "Enter") { e.preventDefault(); p.querySelector(`[data-add-btn="${e.currentTarget.dataset.addSection}"]`).click(); }
     });
   });
+  p.querySelector("#table-summary-btn").addEventListener("click", openTableSummaryModal);
 }
 
 function openAreaModal(sectionId, areaId) {
@@ -2053,6 +2292,12 @@ function openAreaModal(sectionId, areaId) {
   const assignee = document.getElementById("area-modal-assignee");
   assignee.innerHTML = assigneeOptionsHtml(area.assignee);
   assignee.value = area.assignee || "";
+  document.getElementById("area-modal-table-type").value = area.tableType || "";
+  const tableQty = document.getElementById("area-modal-table-qty");
+  tableQty.innerHTML = tableQtyOptionsHtml(area.tableQty);
+  tableQty.value = area.tableQty ? String(area.tableQty) : "";
+  renderAreaCoverImage();
+  renderAreaMaterials();
   renderAreaTodos();
   document.getElementById("area-modal").classList.add("open");
 }
@@ -2064,6 +2309,29 @@ function closeAreaModal() {
 function currentArea() {
   return openAreaRef ? findArea(openAreaRef.sectionId, openAreaRef.areaId) : null;
 }
+function openTableSummaryModal() {
+  const counts = {};
+  activities.forEach(section => (section.areas || []).forEach(area => {
+    if (!area.tableType || !area.tableQty) return;
+    counts[area.tableType] = (counts[area.tableType] || 0) + Number(area.tableQty);
+  }));
+  const types = TABLE_TYPE_OPTIONS.filter(t => counts[t]);
+  const body = document.getElementById("table-summary-body");
+  if (types.length === 0) {
+    body.innerHTML = '<tr><td colspan="2" class="muted" style="padding:12px;">No tables assigned yet. Set a table type and quantity on an area to see it here.</td></tr>';
+  } else {
+    const total = types.reduce((n, t) => n + counts[t], 0);
+    body.innerHTML = types.map(t => `<tr><td>${esc(t)}</td><td style="text-align:right;">${counts[t]}</td></tr>`).join("")
+      + `<tr><td style="font-weight:600;">Total tables</td><td style="text-align:right; font-weight:700; color:var(--primary);">${total}</td></tr>`;
+  }
+  document.getElementById("table-summary-modal").classList.add("open");
+}
+document.getElementById("table-summary-close").addEventListener("click", () => {
+  document.getElementById("table-summary-modal").classList.remove("open");
+});
+document.getElementById("table-summary-modal").addEventListener("click", (e) => {
+  if (e.target.id === "table-summary-modal") document.getElementById("table-summary-modal").classList.remove("open");
+});
 function renderAreaTodos() {
   const found = currentArea();
   if (!found) return;
@@ -2128,7 +2396,6 @@ async function addAreaTodo() {
   renderAreaTodos();
   input.focus();
 }
-document.getElementById("area-modal-close").addEventListener("click", closeAreaModal);
 document.getElementById("area-modal").addEventListener("click", (e) => {
   if (e.target.id === "area-modal") closeAreaModal();
 });
@@ -2159,9 +2426,258 @@ document.getElementById("area-modal-assignee").addEventListener("change", async 
   found.area.assignee = e.currentTarget.value;
   await saveKey("wedding-activity-areas", activities);
 });
+document.getElementById("area-modal-table-type").addEventListener("change", async (e) => {
+  const found = currentArea();
+  if (!found) return;
+  found.area.tableType = e.currentTarget.value;
+  await saveKey("wedding-activity-areas", activities);
+});
+document.getElementById("area-modal-table-qty").addEventListener("change", async (e) => {
+  const found = currentArea();
+  if (!found) return;
+  found.area.tableQty = e.currentTarget.value ? Number(e.currentTarget.value) : "";
+  await saveKey("wedding-activity-areas", activities);
+});
 document.getElementById("area-modal-todo-add").addEventListener("click", addAreaTodo);
 document.getElementById("area-modal-todo-new").addEventListener("keydown", (e) => {
   if (e.key === "Enter") { e.preventDefault(); addAreaTodo(); }
+});
+
+// --- Cover image ---
+function renderAreaCoverImage() {
+  const found = currentArea();
+  if (!found) return;
+  const img = document.getElementById("area-modal-cover-img");
+  const placeholder = document.getElementById("area-modal-cover-placeholder");
+  const removeBtn = document.getElementById("area-modal-cover-remove");
+  if (found.area.coverImage) {
+    img.src = found.area.coverImage;
+    img.style.display = "";
+    placeholder.style.display = "none";
+    removeBtn.style.display = "";
+  } else {
+    img.style.display = "none";
+    img.removeAttribute("src");
+    placeholder.style.display = "";
+    removeBtn.style.display = "none";
+  }
+}
+function readAndResizeImage(file, maxDim) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        let w = img.naturalWidth, h = img.naturalHeight;
+        if (w > maxDim || h > maxDim) {
+          if (w >= h) { h = Math.round(h * maxDim / w); w = maxDim; }
+          else { w = Math.round(w * maxDim / h); h = maxDim; }
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = w; canvas.height = h;
+        canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+        resolve({dataUrl: canvas.toDataURL("image/jpeg", 0.85), width: w, height: h});
+      };
+      img.onerror = () => reject(new Error("Couldn't read that image."));
+      img.src = reader.result;
+    };
+    reader.onerror = () => reject(new Error("Couldn't read that file."));
+    reader.readAsDataURL(file);
+  });
+}
+function openAreaCoverPicker() {
+  document.getElementById("area-modal-cover-input").click();
+}
+document.getElementById("area-modal-cover-banner").addEventListener("click", openAreaCoverPicker);
+document.getElementById("area-modal-cover-input").addEventListener("change", async (e) => {
+  const file = e.currentTarget.files[0];
+  e.currentTarget.value = "";
+  if (!file) return;
+  const found = currentArea();
+  if (!found) return;
+  try {
+    const {dataUrl, width, height} = await readAndResizeImage(file, 1200);
+    found.area.coverImage = dataUrl;
+    found.area.coverImageW = width;
+    found.area.coverImageH = height;
+    await saveKey("wedding-activity-areas", activities);
+    renderAreaCoverImage();
+  } catch (err) {
+    alert("Couldn't use that image. Try a different file.");
+  }
+});
+document.getElementById("area-modal-cover-remove").addEventListener("click", async (e) => {
+  e.stopPropagation();
+  const found = currentArea();
+  if (!found) return;
+  delete found.area.coverImage;
+  delete found.area.coverImageW;
+  delete found.area.coverImageH;
+  await saveKey("wedding-activity-areas", activities);
+  renderAreaCoverImage();
+});
+
+// --- Material checklist ---
+function materialQuality(m) {
+  return m.quality != null ? m.quality : (m.material || "");
+}
+function renderAreaMaterials() {
+  const found = currentArea();
+  if (!found) return;
+  const area = found.area;
+  const materials = area.materials || [];
+  const tbody = document.getElementById("area-modal-materials");
+  if (materials.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="4" class="muted" style="padding:12px;">No materials yet. Click + to add one.</td></tr>';
+  } else {
+    tbody.innerHTML = materials.map(m => `
+      <tr>
+        <td style="text-align:center;"><input type="checkbox" data-mat-done="${m.id}" ${m.done ? "checked" : ""} aria-label="Acquired" /></td>
+        <td><input type="text" autocomplete="off" data-lpignore="true" data-1p-ignore data-matid="${m.id}" data-matfield="item" value="${esc(m.item)}" placeholder="Item name" /></td>
+        <td><input type="text" autocomplete="off" data-lpignore="true" data-1p-ignore data-matid="${m.id}" data-matfield="quality" value="${esc(materialQuality(m))}" placeholder="Quality" /></td>
+        <td><button class="icon-btn" data-mat-remove="${m.id}" aria-label="Remove material" title="Remove">${TRASH_ICON}</button></td>
+      </tr>`).join("");
+  }
+  tbody.querySelectorAll("[data-mat-done]").forEach(cb => {
+    cb.addEventListener("change", async (e) => {
+      const m = area.materials.find(x => x.id === e.currentTarget.dataset.matDone);
+      if (!m) return;
+      m.done = e.currentTarget.checked;
+      await saveKey("wedding-activity-areas", activities);
+    });
+  });
+  tbody.querySelectorAll("[data-matfield]").forEach(el => {
+    el.addEventListener("change", async (e) => {
+      const m = area.materials.find(x => x.id === e.currentTarget.dataset.matid);
+      if (!m) return;
+      m[e.currentTarget.dataset.matfield] = e.currentTarget.value;
+      await saveKey("wedding-activity-areas", activities);
+    });
+  });
+  tbody.querySelectorAll("[data-mat-remove]").forEach(btn => {
+    btn.addEventListener("click", async (e) => {
+      area.materials = (area.materials || []).filter(x => x.id !== e.currentTarget.dataset.matRemove);
+      await saveKey("wedding-activity-areas", activities);
+      renderAreaMaterials();
+    });
+  });
+}
+async function addAreaMaterial() {
+  const found = currentArea();
+  if (!found) return;
+  found.area.materials = found.area.materials || [];
+  found.area.materials.push({id: uid(), item: "", quality: "", done: false});
+  await saveKey("wedding-activity-areas", activities);
+  renderAreaMaterials();
+  const rows = document.querySelectorAll('#area-modal-materials [data-matfield="item"]');
+  if (rows.length) rows[rows.length - 1].focus();
+}
+document.getElementById("area-modal-material-add").addEventListener("click", addAreaMaterial);
+
+// --- Export to Word ---
+function dataUrlToUint8Array(dataUrl) {
+  const base64 = dataUrl.split(",")[1] || "";
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+function buildGuidelineLines(section, area) {
+  const materials = area.materials || [];
+  const lines = [];
+  lines.push(`Set up "${area.name}" within the ${section.label} portion of the day. ${area.assignee ? `${area.assignee} owns this area end to end.` : "Assign an owner for this area before the day of."}`);
+  if (area.tableType) {
+    lines.push(`Table: ${area.tableQty ? area.tableQty + "x " : ""}${area.tableType}.`);
+  }
+  if (materials.length) {
+    const list = materials.map(m => [m.item, materialQuality(m)].filter(Boolean).join(" — ")).join("; ");
+    lines.push(`Gather all checklist materials ahead of time: ${list}.`);
+  } else {
+    lines.push("Add materials to the checklist above so nothing gets missed on setup.");
+  }
+  if (area.notes && area.notes.trim()) {
+    lines.push(`Design the experience around this: ${area.notes.trim()}`);
+  }
+  const openTodos = (area.todos || []).filter(t => !t.done);
+  if (openTodos.length) {
+    lines.push(`Close out these tasks before the event: ${openTodos.map(t => t.text).join("; ")}.`);
+  }
+  lines.push("Walk the space once fully set up, checklist in hand, before guests arrive.");
+  return lines;
+}
+async function exportAreaDocx(section, area) {
+  const {Document, Packer, Paragraph, HeadingLevel, ImageRun, Table, TableRow, TableCell, TextRun, WidthType, AlignmentType} = docx;
+  const children = [];
+  children.push(new Paragraph({text: area.name, heading: HeadingLevel.TITLE}));
+  const subtitleParts = [section.label];
+  if (area.assignee) subtitleParts.push(`Assignee: ${area.assignee}`);
+  children.push(new Paragraph({text: subtitleParts.join(" · "), spacing: {after: 200}}));
+
+  if (area.coverImage) {
+    const bytes = dataUrlToUint8Array(area.coverImage);
+    const w = area.coverImageW || 600, h = area.coverImageH || 400;
+    const docWidth = 420;
+    const docHeight = Math.round(docWidth * (h / w));
+    children.push(new Paragraph({
+      children: [new ImageRun({type: "jpg", data: bytes, transformation: {width: docWidth, height: docHeight}})],
+      alignment: AlignmentType.CENTER,
+      spacing: {after: 240}
+    }));
+  }
+
+  children.push(new Paragraph({text: "User Experience", heading: HeadingLevel.HEADING_1}));
+  children.push(new Paragraph({text: (area.notes && area.notes.trim()) || "No notes added yet.", spacing: {after: 200}}));
+
+  children.push(new Paragraph({text: "Material Checklist", heading: HeadingLevel.HEADING_1}));
+  const materials = area.materials || [];
+  if (materials.length) {
+    const headerRow = new TableRow({
+      tableHeader: true,
+      children: ["Item Name", "Quality", "Status"].map(h => new TableCell({
+        width: {size: 33, type: WidthType.PERCENTAGE},
+        children: [new Paragraph({children: [new TextRun({text: h, bold: true})]})]
+      }))
+    });
+    const rows = materials.map(m => new TableRow({
+      children: [m.item || "", materialQuality(m), m.done ? "Ready" : "Needed"].map(v => new TableCell({
+        children: [new Paragraph(v)]
+      }))
+    }));
+    children.push(new Table({width: {size: 100, type: WidthType.PERCENTAGE}, rows: [headerRow, ...rows]}));
+  } else {
+    children.push(new Paragraph({text: "No materials added yet."}));
+  }
+  children.push(new Paragraph({text: "", spacing: {after: 200}}));
+
+  children.push(new Paragraph({text: "Implementation Guideline", heading: HeadingLevel.HEADING_1}));
+  buildGuidelineLines(section, area).forEach(line => {
+    children.push(new Paragraph({text: line, bullet: {level: 0}, spacing: {after: 120}}));
+  });
+
+  const doc = new Document({sections: [{children}]});
+  const blob = await Packer.toBlob(doc);
+  const safeName = `${section.label} - ${area.name}`.replace(/[\\/:*?"<>|]/g, "-");
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${safeName}.docx`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+document.getElementById("area-modal-export").addEventListener("click", async (e) => {
+  const found = currentArea();
+  if (!found) return;
+  const btn = e.currentTarget;
+  btn.disabled = true;
+  try {
+    await exportAreaDocx(found.section, found.area);
+  } catch (err) {
+    alert("Couldn't generate the document. Please try again.");
+  } finally {
+    btn.disabled = false;
+  }
 });
 
 const TIMELINE_SEED = [{"time": "7:00 am", "event": "Wake up & light breakfast", "duration": "", "desc": "Bride & wedding party fuels up before the long day.", "section": "Morning Preparation", "order": 0}, {"time": "8:15 am", "event": "Return to getting-ready suite", "duration": "", "desc": "Travel back; bridal party hair & makeup begins; groom & groomsmen start getting ready.", "section": "Morning Preparation", "order": 1}, {"time": "8:15 am", "event": "Mom 1 makeup", "duration": "1 hr", "desc": "Mom 1's makeup session. (8:15 am to 9:15 am)", "section": "Morning Preparation", "order": 2}, {"time": "9:00 am", "event": "Tea ceremony", "duration": "~20 min", "desc": "Traditional tea serving with family elders, a moment of gratitude before celebrations begin.", "section": "Morning Preparation", "order": 3}, {"time": "9:15 am", "event": "Mom 2 makeup", "duration": "1 hr", "desc": "Mom 2's makeup session. (9:15 am to 10:15 am)", "section": "Morning Preparation", "order": 4}, {"time": "9:30 am", "event": "Bride's makeup begins", "duration": "3 hr", "desc": "Foundation, eyes, lips, setting. (9:30 am to 12:30 pm)", "section": "Morning Preparation", "order": 5}, {"time": "11:30 am", "event": "Bridal party lunch break", "duration": "", "desc": "Light lunch delivered to getting-ready suite, avoid anything heavy or staining.", "section": "Morning Preparation", "order": 6}, {"time": "12:00 pm", "event": "Groom fully ready", "duration": "", "desc": "Groom & groomsmen portraits with photographer.", "section": "Morning Preparation", "order": 7}, {"time": "12:30 pm", "event": "Ceremony rehearsal", "duration": "~45 min", "desc": "Full wedding party at ceremony venue, processional order, positions, cues, vow exchange run-through, recessional.", "section": "Morning Preparation", "order": 8}, {"time": "12:30 pm", "event": "Makeup complete, into the gown", "duration": "", "desc": "Dress assist with bridesmaids; veil, accessories, and shoes.", "section": "Morning Preparation", "order": 9}, {"time": "1:00 pm", "event": "Bride fully ready, detail photos", "duration": "", "desc": "Bouquet, rings, shoes, dress details; getting-ready shots with bridal party.", "section": "Morning Preparation", "order": 10}, {"time": "1:45 pm", "event": "Holding room, final touch-ups", "duration": "", "desc": "Calm moment before the first look; officiant & wedding party in position.", "section": "Morning Preparation", "order": 11}, {"time": "2:00 pm", "event": "First look", "duration": "~15 min", "desc": "Bride & groom see each other for the first time, private reveal before guests arrive.", "section": "Pre-Ceremony", "order": 12}, {"time": "2:15 pm", "event": "Couple portraits", "duration": "~30 min", "desc": "Golden light window, romantic couple shots at portrait locations.", "section": "Pre-Ceremony", "order": 13}, {"time": "2:45 pm", "event": "Bridal party portraits", "duration": "~15 min", "desc": "Bridesmaids, groomsmen, full bridal party lineup shots.", "section": "Pre-Ceremony", "order": 14}, {"time": "3:00 pm", "event": "Guest check-in begins", "duration": "", "desc": "Welcome table open; escort cards, programs, welcome bags distributed.", "section": "Pre-Ceremony", "order": 15}, {"time": "3:10 pm", "event": "Fun activities open", "duration": "", "desc": "Design your own bag, DIY scented crystal stones, and more.", "section": "Pre-Ceremony", "order": 16}, {"time": "3:45 pm", "event": "Couple to holding room", "duration": "", "desc": "Final touch-ups, calm moment; officiant & wedding party in position.", "section": "Pre-Ceremony", "order": 17}, {"time": "4:00 pm", "event": "Ceremony begins", "duration": "~25-30 min", "desc": "Processional, vows, ring exchange, pronouncement & kiss.", "section": "Ceremony", "order": 18}, {"time": "4:30 pm", "event": "Group photos", "duration": "~25 min", "desc": "Family formals first (immediate family, grandparents, extended), then full guest group shot.", "section": "Ceremony", "order": 19}, {"time": "5:00 pm", "event": "Cocktail hour begins", "duration": "", "desc": "Guests move to cocktail space; passed appetizers & drinks; lounge music.", "section": "Cocktail Hour", "order": 20}, {"time": "5:30 pm", "event": "Couple joins cocktail hour briefly", "duration": "", "desc": "Mingle with guests, grab a bite; candid photos.", "section": "Cocktail Hour", "order": 21}, {"time": "5:45 pm", "event": "Guests invited to take their seats", "duration": "", "desc": "MC or venue staff directs guests into the reception room.", "section": "Cocktail Hour", "order": 22}, {"time": "6:00 pm", "event": "Grand entrance", "duration": "", "desc": "Bridal party introduced one by one; couple enters last to hype music.", "section": "Reception", "order": 23}, {"time": "6:10 pm", "event": "Dinner service begins", "duration": "", "desc": "First course served; ambient background music during dining.", "section": "Reception", "order": 24}, {"time": "7:00 pm", "event": "Welcome speech & blessing", "duration": "~15 min", "desc": "Host or family elder opens with a blessing; couple's welcome toast.", "section": "Reception", "order": 25}, {"time": "7:20 pm", "event": "Toasts from family & friends", "duration": "", "desc": "Best man, maid of honor, and any additional speakers (~2-3 total).", "section": "Reception", "order": 26}, {"time": "7:30 pm", "event": "First dance", "duration": "~10 min", "desc": "Couple's first dance; parent dances to follow.", "section": "Evening Highlights", "order": 27}, {"time": "7:45 pm", "event": "Dance floor opens", "duration": "", "desc": "DJ or band kicks off; dessert stations may open early for late arrivals.", "section": "Evening Highlights", "order": 28}, {"time": "8:30 pm", "event": "Cake cutting & dessert", "duration": "", "desc": "Couple cuts the cake together; dessert station fully opens for all guests.", "section": "Evening Highlights", "order": 29}, {"time": "9:00 pm", "event": "Party time", "duration": "", "desc": "Full dance floor, glow sticks, games, high energy. Let the night unfold!", "section": "Evening Highlights", "order": 30}, {"time": "10:30 pm", "event": "Last song & farewell", "duration": "", "desc": "Final dance announced; guests line up for send-off.", "section": "Evening Highlights", "order": 31}, {"time": "11:00 pm", "event": "Reception ends, send-off", "duration": "", "desc": "Couple's grand exit (sparklers, ribbon wands, or confetti).", "section": "Evening Highlights", "order": 32}];
@@ -2891,7 +3407,7 @@ function renderDashboard() {
 
   let html = `
   <div class="dash-hero-row" style="margin-bottom:16px;">
-    <div class="hero-banner" style="margin-bottom:0;">
+    <div class="hero-banner" style="margin-bottom:0; height:100%; display:flex; flex-direction:column; justify-content:center; box-sizing:border-box;">
       <div class="hero-days">${daysLeft >= 0 ? daysLeft + " days to go" : "The big day has passed \u2014 congrats!"}</div>
       <div class="hero-sub">${weddingDateLabel}</div>
     </div>
@@ -3018,6 +3534,12 @@ function renderDashboard() {
 }
 
 (async function init() {
+  // "No rows came back" can mean an empty account or a request that timed out.
+  // Seeding defaults on the second case writes them over real data, so every
+  // seed below is gated on having actually reached the server.
+  const maySeed = await storeIsTrustworthy();
+  if (!maySeed) showOfflineBanner();
+
   const savedItems = await loadKey("wedding-todo-items");
   const savedState = (await loadKey("wedding-checklist")) || {};
 
@@ -3030,7 +3552,7 @@ function renderDashboard() {
       await saveKey("wedding-assignee-reset-done", true);
     }
     todoState = savedState;
-  } else {
+  } else if (maySeed) {
     todoData = TODO_DEFAULTS.map(s => ({
       id: s.id,
       label: s.label,
@@ -3038,15 +3560,19 @@ function renderDashboard() {
     }));
     todoState = savedState;
     await saveKey("wedding-todo-items", todoData);
+  } else {
+    todoData = [];
+    todoState = savedState;
   }
 
   guests = await loadKey("wedding-guests");
-  if (!guests || guests.length === 0) {
+  if ((!guests || guests.length === 0) && maySeed) {
     guests = GUEST_SEED.map(s => ({id: uid(), ...s}));
     await saveKey("wedding-guests", guests);
   }
+  if (!guests) guests = [];
   activities = (await loadKey("wedding-activity-areas")) || [];
-  if (!Array.isArray(activities) || activities.length === 0) {
+  if ((!Array.isArray(activities) || activities.length === 0) && maySeed) {
     activities = AREA_SEED.map(s => ({
       id: s.id,
       label: s.label,
@@ -3054,13 +3580,14 @@ function renderDashboard() {
     }));
     await saveKey("wedding-activity-areas", activities);
   }
+  if (!Array.isArray(activities)) activities = [];
   timeline = (await loadKey("wedding-timeline")) || [];
-  if (timeline.length === 0) {
+  if (timeline.length === 0 && maySeed) {
     timeline = TIMELINE_SEED.map(s => ({id: uid(), ...s}));
     await saveKey("wedding-timeline", timeline);
   }
   timelineSections = (await loadKey("wedding-timeline-sections")) || [];
-  if (timelineSections.length === 0) {
+  if (timelineSections.length === 0 && maySeed) {
     timelineSections = TIMELINE_SECTION_DEFAULTS.map(name => ({id: uid(), name}));
     await saveKey("wedding-timeline-sections", timelineSections);
   }
@@ -3068,14 +3595,14 @@ function renderDashboard() {
   budget = (await loadKey("wedding-budget")) || { total: 0, vendors: [], expenses: [] };
   if (!budget.vendors) budget.vendors = [];
   if (!budget.expenses) budget.expenses = [];
-  if (budget.vendors.length === 0) {
+  if (budget.vendors.length === 0 && maySeed) {
     budget.vendors = BUDGET_SEED.map(v => ({id: uid(), ...v}));
     if (!budget.total) budget.total = 50000;
     await saveKey("wedding-budget", budget);
   }
   shopList = (await loadKey("wedding-shop-list")) || [];
   storeOptions = (await loadKey("wedding-store-options")) || [];
-  if (storeOptions.length === 0) {
+  if (storeOptions.length === 0 && maySeed) {
     storeOptions = STORE_DEFAULTS.map(name => ({id: uid(), name}));
     await saveKey("wedding-store-options", storeOptions);
   }
@@ -3090,7 +3617,10 @@ function renderDashboard() {
 
   // Push anything that was only saved locally (e.g. edits made while the
   // backend was down) up to the server now that it is reachable again.
-  syncLocalToRemote();
+  await syncLocalToRemote();
+
+  // Last, so the day's copy reflects anything that just synced up.
+  writeDailySnapshotIfNeeded();
 })();
 </script>
 </body>
