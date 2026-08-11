@@ -1266,6 +1266,8 @@ function icon(name, size) {
     grid: '<rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect><rect x="14" y="14" width="7" height="7" rx="1"></rect>',
     table: '<rect x="3" y="3" width="18" height="18" rx="2"></rect><path d="M3 9h18"></path><path d="M3 15h18"></path><path d="M9 9v12"></path>',
     clock: '<circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path>',
+    eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle>',
+    eyeOff: '<path d="M9.9 4.24A9.1 9.1 0 0 1 12 4c6.5 0 10 8 10 8a18.5 18.5 0 0 1-2.16 3.19"></path><path d="M6.61 6.61A18.2 18.2 0 0 0 2 12s3.5 7 10 7a9.1 9.1 0 0 0 5.39-1.61"></path><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"></path><line x1="2" y1="2" x2="22" y2="22"></line>',
   };
   return `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${paths[name] || ""}</svg>`;
 }
@@ -3198,6 +3200,11 @@ function budgetSpent() {
 function fmtMoney(n) {
   return "$" + Number(n || 0).toLocaleString(undefined, {maximumFractionDigits: 0});
 }
+// Amounts on the dashboard start hidden so the page can be opened in front of
+// other people. Deliberately not persisted: the whole point is that it is
+// hidden by default, so a stored "shown" would defeat it on the next open.
+let budgetHidden = true;
+function dashMoney(n) { return budgetHidden ? "$•••••" : fmtMoney(n); }
 function progressRing({pct, centerText, centerSub, color, title}) {
   const r = 54, c = 2 * Math.PI * r;
   const shown = Math.max(0, Math.min(100, Number(pct) || 0));
@@ -3638,8 +3645,8 @@ function renderDashboard() {
     <div class="stat icon-stat">
       <div class="icon-stat-badge">${icon("wallet")}</div>
       <div>
-        <div class="num">${fmtMoney(spent)}</div>
-        <div class="lbl">${total ? "of " + fmtMoney(total) + " budget" : "spent so far"}</div>
+        <div class="num">${dashMoney(spent)}</div>
+        <div class="lbl">${total ? "of " + dashMoney(total) + " budget" : "spent so far"}</div>
       </div>
     </div>
     <div class="stat icon-stat">
@@ -3654,7 +3661,13 @@ function renderDashboard() {
   <div class="dash-duo">
     <div class="card">
       <div class="row" style="justify-content:space-between; margin-bottom:8px;">
-        <p class="section-title" style="margin:0;">Budget</p>
+        <p class="section-title" style="margin:0; display:flex; align-items:center; gap:8px;">
+          Budget
+          <button class="icon-btn" id="budget-eye" aria-pressed="${budgetHidden ? "false" : "true"}"
+            aria-label="${budgetHidden ? "Show budget amounts" : "Hide budget amounts"}"
+            title="${budgetHidden ? "Show amounts" : "Hide amounts"}"
+            style="padding:2px 4px; min-height:0; color:var(--ink-soft);">${icon(budgetHidden ? "eyeOff" : "eye", 16)}</button>
+        </p>
         <button id="goto-budget" style="border:none; background:none; padding:0; color:var(--primary); font-size:13px; font-weight:600; cursor:pointer; font-family:inherit;">View all &rarr;</button>
       </div>
       <div class="ring-wrap">
@@ -3666,8 +3679,8 @@ function renderDashboard() {
           title: "Budget used"
         })}
         <div class="ring-legend">
-          <div class="ring-main">${fmtMoney(spent)} spent</div>
-          <div class="ring-note">${total ? (remaining < 0 ? fmtMoney(Math.abs(remaining)) + " over budget" : fmtMoney(remaining) + " remaining") : "Set a total budget in the Budget tab"}</div>
+          <div class="ring-main">${dashMoney(spent)} spent</div>
+          <div class="ring-note">${total ? (remaining < 0 ? dashMoney(Math.abs(remaining)) + " over budget" : dashMoney(remaining) + " remaining") : "Set a total budget in the Budget tab"}</div>
         </div>
       </div>
     </div>
@@ -3714,6 +3727,15 @@ function renderDashboard() {
     gotoLink.addEventListener("click", (e) => {
       e.preventDefault();
       goToTab("todo");
+    });
+  }
+  const budgetEye = document.getElementById("budget-eye");
+  if (budgetEye) {
+    budgetEye.addEventListener("click", () => {
+      budgetHidden = !budgetHidden;
+      renderDashboard();
+      const again = document.getElementById("budget-eye");
+      if (again) again.focus();
     });
   }
   const gotoBudgetLink = document.getElementById("goto-budget");
