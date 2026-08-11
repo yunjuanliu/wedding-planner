@@ -318,7 +318,14 @@
   .guest-dishes select { flex: 1 1 0; min-width: 0; }
   .person-row { padding: 4px 0; }
   .person-row > [data-person-name] { grid-column: 1 / 5; width: 100%; }
+  .person-row > .kid-toggle { grid-column: 6; }
   .person-row > [data-action=remove-person] { grid-column: 7; }
+  .kid-toggle {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 12px; color: var(--ink-soft); cursor: pointer; user-select: none;
+  }
+  .kid-toggle input { margin: 0; cursor: pointer; }
+  .kid-toggle:has(input:checked) { color: #C23568; font-weight: 600; }
   .person-add-row { padding: 2px 0 10px; }
   .person-add-row > .link-btn { grid-column: 1 / 5; font-size: 12.5px; }
   /* The add-note button is clutter on the many rows that have no note, but
@@ -2033,15 +2040,58 @@ function blankDishes() { return new Array(DISHES_PER_GUEST).fill(""); }
 function ensureGuestPeople(g) {
   if (!Array.isArray(g.dishes)) g.dishes = blankDishes();
   while (g.dishes.length < DISHES_PER_GUEST) g.dishes.push("");
-  if (Array.isArray(g.people)) {
-    g.people.forEach(pr => {
-      if (!Array.isArray(pr.dishes)) pr.dishes = blankDishes();
-      while (pr.dishes.length < DISHES_PER_GUEST) pr.dishes.push("");
-    });
-    return false;
+  let touched = false;
+  if (!Array.isArray(g.people)) {
+    g.people = parsePlusOneNames(g.plusOne).map(name => ({id: uid(), name, dishes: blankDishes()}));
+    touched = true;
   }
-  g.people = parsePlusOneNames(g.plusOne).map(name => ({id: uid(), name, dishes: blankDishes()}));
-  return true;
+  g.people.forEach(pr => {
+    if (!Array.isArray(pr.dishes)) pr.dishes = blankDishes();
+    while (pr.dishes.length < DISHES_PER_GUEST) pr.dishes.push("");
+    // Only fill in a missing flag, never overwrite one - otherwise unticking a
+    // seeded name would silently tick itself again on the next render.
+    if (pr.isKid === undefined) {
+      pr.isKid = KNOWN_KID_NAMES.indexOf(pr.name) !== -1;
+      touched = true;
+    }
+  });
+  return touched;
+}
+
+// The children identified so far. Used only to pre-tick the Kid boxes the
+// first time; after that the ticks in the data are the source of truth.
+const KNOWN_KID_NAMES = ["Ethan Gu", "Lingxuan Gu", "Sydney Yang", "Jasper Yi"];
+
+function adultRows() {
+  const rows = [];
+  guests.forEach(g => {
+    const push = (full, isKid) => {
+      const name = (full || "").trim();
+      if (!name || isKid) return;
+      rows.push({first: name.split(/\s+/)[0], full: name, household: g.name || ""});
+    };
+    push(g.name, false);
+    (g.people || []).forEach(pr => push(pr.name, pr.isKid));
+  });
+  return rows;
+}
+
+function exportAdultNames() {
+  const rows = adultRows();
+  const csv = ["First name,Full name,Household"].concat(
+    rows.map(r => [r.first, r.full, r.household]
+      .map(v => '"' + String(v).replace(/"/g, '""') + '"').join(","))
+  ).join("\n");
+  const blob = new Blob(["﻿" + csv], {type: "text/csv;charset=utf-8"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `adult-guest-names-${new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return rows.length;
 }
 
 function renderGuests() {
@@ -2052,7 +2102,10 @@ function renderGuests() {
   const drivingCount = guests.filter(g => g.transport === "Driving").length;
   const flyingCount = guests.filter(g => g.transport === "Flying").length;
   const totalKids = guests.reduce((s,g) => s + (Number(g.kids)||0), 0);
-  let html = `<div class="stat-row">
+  let html = `<div class="row" style="justify-content:flex-end; margin-bottom:12px;">
+    <button id="g-export" title="Download every named guest who is not ticked as a kid">Export adult names</button>
+  </div>
+  <div class="stat-row">
     <div class="stat"><div class="num">${guests.length}</div><div class="lbl">Households</div></div>
     <div class="stat"><div class="num">${totalPeople}</div><div class="lbl">Total guests (incl. kids)</div></div>
     <div class="stat" style="background:#FBE9EF; border:1px solid #F3C8D6;"><div class="num" style="color:#C23568;">${totalKids}</div><div class="lbl">Kids</div></div>
@@ -2108,6 +2161,10 @@ function renderGuests() {
           <div class="guest-dishes">
             ${pr.dishes.map((d, i) => `<select data-gid="${g.id}" data-pid="${pr.id}" data-person-dish="${i}" title="Dish ${i+1}">${dishOptionsHtml(d)}</select>`).join("")}
           </div>
+          <label class="kid-toggle" title="Tick if this guest is a child - kids are left out of the adult name export">
+            <input type="checkbox" data-gid="${g.id}" data-pid="${pr.id}" data-person-kid ${pr.isKid ? "checked" : ""} />
+            <span>Kid</span>
+          </label>
           <button class="icon-btn" data-gid="${g.id}" data-pid="${pr.id}" data-action="remove-person" aria-label="Remove ${esc(pr.name) || "guest"}">${TRASH_ICON}</button>
         </div>`).join("")}
       <div class="person-row person-add-row">
@@ -2185,6 +2242,20 @@ function renderGuests() {
       found.person.name = e.currentTarget.value.trim();
       await saveKey("wedding-guests", guests);
     });
+  });
+  list.querySelectorAll("[data-person-kid]").forEach(cb => {
+    cb.addEventListener("change", async (e) => {
+      const found = findPerson(e.currentTarget.dataset.gid, e.currentTarget.dataset.pid);
+      if (!found) return;
+      found.person.isKid = e.currentTarget.checked;
+      await saveKey("wedding-guests", guests);
+    });
+  });
+  document.getElementById("g-export").addEventListener("click", (e) => {
+    const n = exportAdultNames();
+    const btn = e.currentTarget;
+    btn.textContent = `Exported ${n} names`;
+    setTimeout(() => { btn.textContent = "Export adult names"; }, 2000);
   });
   list.querySelectorAll("[data-person-dish]").forEach(sel => {
     sel.addEventListener("change", async (e) => {
