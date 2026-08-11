@@ -1518,17 +1518,26 @@ async function syncLocalToRemote() {
 }
 
 const WEDDING_DATE = new Date(2026, 8, 19); // September 19, 2026
+// Each section runs from its own start until the day the next one begins, so
+// every date lands in exactly one. The ranges used to be islands with 30 days
+// falling between them - a task due in a gap matched no section, so the
+// auto-move on a due-date change quietly did nothing. Each start day is
+// unchanged; only the ends were stretched to meet the next section.
+// s1 reaches far back so a date earlier than 10 weeks out still has a home.
 const SECTION_DAY_RANGES = {
-  s1: {startDaysBefore: 70, endDaysBefore: 56},  // 10-8 weeks out
-  s2: {startDaysBefore: 42, endDaysBefore: 28},  // 6-4 weeks out
-  s3: {startDaysBefore: 21, endDaysBefore: 14},  // 3-2 weeks out
-  s4: {startDaysBefore: 7, endDaysBefore: 1},    // week of
-  s5: {startDaysBefore: 1, endDaysBefore: 1},    // day before
-  s6: {startDaysBefore: 0, endDaysBefore: 0},    // day of
+  s1: {startDaysBefore: 3650, endDaysBefore: 43},  // 10 weeks out and earlier
+  s2: {startDaysBefore: 42, endDaysBefore: 22},    // 6 weeks out
+  s3: {startDaysBefore: 21, endDaysBefore: 8},     // 3 weeks out
+  s4: {startDaysBefore: 7, endDaysBefore: 2},      // week of
+  s5: {startDaysBefore: 1, endDaysBefore: 1},      // day before
+  s6: {startDaysBefore: 0, endDaysBefore: 0},      // day of
 };
 function fmtDate(d) {
   return d.toLocaleDateString(undefined, {month:"short", day:"numeric"});
 }
+// A section that reaches back years is the catch-all for everything early;
+// printing its literal start date would show a year in the past.
+const OPEN_ENDED_DAYS = 365;
 function sectionDateLabel(sectionId) {
   const range = SECTION_DAY_RANGES[sectionId];
   if (!range) return "";
@@ -1536,6 +1545,7 @@ function sectionDateLabel(sectionId) {
   start.setDate(start.getDate() - range.startDaysBefore);
   const end = new Date(WEDDING_DATE);
   end.setDate(end.getDate() - range.endDaysBefore);
+  if (range.startDaysBefore > OPEN_ENDED_DAYS) return "Through " + fmtDate(end);
   if (range.startDaysBefore === range.endDaysBefore) return fmtDate(start);
   return fmtDate(start) + " – " + fmtDate(end);
 }
