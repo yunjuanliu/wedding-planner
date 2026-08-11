@@ -1192,14 +1192,12 @@ async function downloadBackup() {
   };
 
   try {
-    const r = await sbFetch(SUPABASE_URL + "/rest/v1/wedding_store?select=key,value", { headers: SB_HEADERS });
+    // Snapshots are copies of these same rows; excluded server-side so the
+    // download stays small rather than fetching megabytes only to drop them.
+    const r = await sbFetch(SUPABASE_URL + "/rest/v1/wedding_store?select=key,value&key=not.like." +
+      encodeURIComponent(SNAPSHOT_PREFIX + "*"), { headers: SB_HEADERS });
     if (r.ok) {
-      // Skip the dated snapshots: they are copies of these same rows, and with
-      // cover images embedded they would dwarf the file being downloaded.
-      (await r.json()).forEach(row => {
-        if (row.key.indexOf("snapshot::") === 0) return;
-        backup.remote[row.key] = row.value;
-      });
+      (await r.json()).forEach(row => { backup.remote[row.key] = row.value; });
       backup.remoteReachable = true;
     }
   } catch (e) {
@@ -1309,7 +1307,10 @@ async function loadStore() {
   if (storeCache) return storeCache;
   storeCache = {};
   try {
-    const r = await sbFetch(SUPABASE_URL + "/rest/v1/wedding_store?select=key,value,updated_at", { headers: SB_HEADERS });
+    // Snapshot rows are whole copies of everything else, cover images included,
+    // so pulling them in here made the payload 4MB and the first paint depend
+    // on downloading data the app never reads. Leave them on the server.
+    const r = await sbFetch(SUPABASE_URL + "/rest/v1/wedding_store?select=key,value,updated_at&key=not.like." + encodeURIComponent(SNAPSHOT_PREFIX + "*"), { headers: SB_HEADERS });
     if (r.ok) {
       (await r.json()).forEach(row => {
         storeCache[row.key] = { value: row.value, ts: Date.parse(row.updated_at) || 0 };
@@ -1436,11 +1437,20 @@ async function writeDailySnapshotIfNeeded() {
   const store = await loadStore();
   const today = new Date().toISOString().slice(0, 10);
 
-  const takenAts = [];
-  for (let i = 0; i < SNAPSHOT_SLOTS; i++) {
-    const row = store[snapshotSlotKey(i)];
-    takenAts.push((row && row.value && row.value.takenAt) || null);
-  }
+  // Ask only for the slot timestamps. Reading the values back to find the
+  // oldest slot would download every snapshot, which is what made the app
+  // slow to start in the first place.
+  const takenAts = new Array(SNAPSHOT_SLOTS).fill(null);
+  try {
+    const r = await sbFetch(SUPABASE_URL + "/rest/v1/wedding_store?select=key,updated_at&key=like." +
+      encodeURIComponent(SNAPSHOT_PREFIX + "slot-*"), { headers: SB_HEADERS });
+    if (!r.ok) return false;
+    (await r.json()).forEach(row => {
+      const i = Number(row.key.slice((SNAPSHOT_PREFIX + "slot-").length));
+      if (i >= 0 && i < SNAPSHOT_SLOTS) takenAts[i] = row.updated_at || null;
+    });
+  } catch (e) { return false; }
+
   if (takenAts.some(t => t && t.slice(0, 10) === today)) return false;
 
   let target = takenAts.indexOf(null);
@@ -1469,7 +1479,8 @@ async function writeDailySnapshotIfNeeded() {
       body: JSON.stringify({ key: key, value: body, updated_at: new Date().toISOString() })
     });
     if (!r.ok) return false;
-    store[key] = { value: body, ts: Date.now() };
+    // Deliberately not cached: storeCache holds only what the app reads, and
+    // a 4MB snapshot sitting in it would be pure memory overhead.
   } catch (e) { return false; }
   return true;
 }
