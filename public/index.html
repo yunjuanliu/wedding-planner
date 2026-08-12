@@ -1130,17 +1130,20 @@ document.getElementById("task-modal-cancel").addEventListener("click", () => {
 document.getElementById("task-modal").addEventListener("click", (e) => {
   if (e.target.id === "task-modal") closeTaskEditModal();
 });
-document.getElementById("task-modal-image").addEventListener("change", (e) => {
+document.getElementById("task-modal-image").addEventListener("change", async (e) => {
   const file = e.target.files[0];
   if (!file) return;
-  const reader = new FileReader();
-  reader.onload = () => {
-    pendingImageData = reader.result;
+  // This used to store the camera file as-is. A single phone photo is several
+  // megabytes, and it would be downloaded with the to-do list on every load.
+  try {
+    const {dataUrl} = await readAndResizeImage(file);
+    pendingImageData = dataUrl;
     const previewWrap = document.getElementById("task-modal-image-preview-wrap");
     previewWrap.style.display = "block";
     document.getElementById("task-modal-image-preview").src = pendingImageData;
-  };
-  reader.readAsDataURL(file);
+  } catch (err) {
+    alert("Couldn't use that image. Try a different file.");
+  }
 });
 document.getElementById("task-modal-image-remove").addEventListener("click", () => {
   pendingImageData = null;
@@ -2681,7 +2684,15 @@ function renderAreaCoverImage() {
     removeBtn.style.display = "none";
   }
 }
-function readAndResizeImage(file, maxDim) {
+// Every image is stored inline in the row it belongs to and downloaded on
+// every page load, so its size is a reliability question, not a cosmetic one.
+// The cover banner is 220px tall and at most ~900px wide, so storing more
+// than 900px was paying to download pixels that are never displayed.
+const IMAGE_MAX_PX = 900;
+const IMAGE_QUALITY = 0.72;
+function readAndResizeImage(file, maxDim, quality) {
+  maxDim = maxDim || IMAGE_MAX_PX;
+  quality = quality || IMAGE_QUALITY;
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
@@ -2694,8 +2705,13 @@ function readAndResizeImage(file, maxDim) {
         }
         const canvas = document.createElement("canvas");
         canvas.width = w; canvas.height = h;
-        canvas.getContext("2d").drawImage(img, 0, 0, w, h);
-        resolve({dataUrl: canvas.toDataURL("image/jpeg", 0.85), width: w, height: h});
+        const ctx = canvas.getContext("2d");
+        // A white base: JPEG has no alpha, and a transparent PNG would
+        // otherwise flatten onto black.
+        ctx.fillStyle = "#FFFFFF";
+        ctx.fillRect(0, 0, w, h);
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve({dataUrl: canvas.toDataURL("image/jpeg", quality), width: w, height: h});
       };
       img.onerror = () => reject(new Error("Couldn't read that image."));
       img.src = reader.result;
@@ -2715,7 +2731,7 @@ document.getElementById("area-modal-cover-input").addEventListener("change", asy
   const found = currentArea();
   if (!found) return;
   try {
-    const {dataUrl, width, height} = await readAndResizeImage(file, 1200);
+    const {dataUrl, width, height} = await readAndResizeImage(file);
     found.area.coverImage = dataUrl;
     found.area.coverImageW = width;
     found.area.coverImageH = height;
