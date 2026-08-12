@@ -484,6 +484,14 @@
   }
   table.data-table td { padding: 6px 8px; border-top: 1px solid var(--border); vertical-align: middle; }
   table.data-table tr:hover td { background: #FBFAFE; }
+  /* Add row sits at the foot of the table; the button fills the cell so the
+     whole width is a click target, not just the few characters of text. */
+  table.data-table tr.add-row td { padding: 0; }
+  table.data-table tr.add-row .link-btn {
+    display: block; width: 100%; text-align: left;
+    padding: 10px 8px; font-size: 13px;
+  }
+  table.data-table tr.add-row:hover td { background: var(--primary-light); }
   table.data-table input[type=text], table.data-table input[type=number] {
     border: 1px solid transparent; background: transparent; width: 100%; padding: 6px 6px; border-radius: 6px;
   }
@@ -3287,7 +3295,6 @@ function renderBudget() {
 
   <div class="row" style="justify-content:space-between; margin:22px 0 10px;">
     <span class="section-title" style="margin:0;">Other expenses</span>
-    <button id="x-add">+ Add item</button>
   </div>
   <div class="table-wrap">
     <table class="data-table" style="min-width:520px;">
@@ -3339,8 +3346,11 @@ function renderBudget() {
   }
 
   const xbody = document.getElementById("x-body");
+  // The add control is the last row of the table rather than a button above
+  // it, so a new line appears where the list actually ends.
+  const xAddRow = `<tr class="add-row"><td colspan="4"><button class="link-btn" id="x-add">+ Add item</button></td></tr>`;
   if (!budget.expenses.length) {
-    xbody.innerHTML = '<tr><td colspan="4" class="muted" style="padding:12px;">No other expenses yet. Add one above.</td></tr>';
+    xbody.innerHTML = '<tr><td colspan="4" class="muted" style="padding:12px;">No other expenses yet.</td></tr>' + xAddRow;
   } else {
     xbody.innerHTML = budget.expenses.map(x => `
       <tr>
@@ -3348,7 +3358,7 @@ function renderBudget() {
         <td><input type="text" autocomplete="off" data-lpignore="true" data-1p-ignore data-form-type="other" data-xid="${x.id}" data-xfield="name" value="${esc(x.name)}" placeholder="Item name" /></td>
         <td><input type="number" autocomplete="off" data-lpignore="true" data-1p-ignore data-form-type="other" data-xid="${x.id}" data-xfield="amount" value="${x.amount == null ? "" : x.amount}" placeholder="—" style="text-align:right;" /></td>
         <td><button class="icon-btn" data-xremove="${x.id}" aria-label="Remove expense" title="Remove">${TRASH_ICON}</button></td>
-      </tr>`).join("");
+      </tr>`).join("") + xAddRow;
   }
 
   document.getElementById("x-add").addEventListener("click", async () => {
