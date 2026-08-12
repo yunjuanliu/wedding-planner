@@ -1668,12 +1668,18 @@ function todoRowHtml(sectionId, item, draggable) {
   const info = checked ? null : dueInfo(item.dueDate);
   const rowTint = info && info.kind === "overdue" ? "background:#FEF6F8; box-shadow:inset 3px 0 0 #D9455F;"
                 : info && info.kind === "today" ? "background:#FFFBF3; box-shadow:inset 3px 0 0 #E8A33D;" : "";
+  // The label must wrap the checkbox and nothing else. It used to stretch with
+  // flex:1 and contain the task text, so the ~120px of blank row after a short
+  // title was a hidden checkbox: clicking it ticked the task off and the task
+  // vanished into Completed, looking exactly like an unexplained deletion.
   return `<div class="item-row" ${dragAttrs} style="${rowTint}">
         ${handle}
-        <label style="display:flex; align-items:center; gap:10px; flex:1; min-width:160px; cursor:pointer;">
+        <label style="display:flex; align-items:center; flex:0 0 auto; cursor:pointer;" title="Mark done">
           <input type="checkbox" data-key="${item.id}" ${checked ? "checked" : ""} style="width:16px; height:16px;" />
-          <span class="task-text ${checked ? "strike" : ""}" data-edit-section="${sectionId}" data-edit-item="${item.id}">${item.text}</span>
         </label>
+        <div style="flex:1; min-width:160px; display:flex; align-items:center;">
+          <span class="task-text ${checked ? "strike" : ""}" data-edit-section="${sectionId}" data-edit-item="${item.id}">${item.text}</span>
+        </div>
         ${checked ? "" : `<span style="flex:0 0 auto;">${dueBadgeHtml(item.dueDate)}</span>`}
         <input type="date" data-due-section="${sectionId}" data-due-item="${item.id}" value="${item.dueDate || ""}" style="flex:0 0 145px;" />
         <select data-assign-section="${sectionId}" data-assign-item="${item.id}" style="flex:0 0 150px;">${options}</select>
