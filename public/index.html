@@ -2686,10 +2686,10 @@ function renderAreaCoverImage() {
 }
 // Every image is stored inline in the row it belongs to and downloaded on
 // every page load, so its size is a reliability question, not a cosmetic one.
-// The cover banner is 220px tall and at most ~900px wide, so storing more
-// than 900px was paying to download pixels that are never displayed.
-const IMAGE_MAX_PX = 900;
-const IMAGE_QUALITY = 0.72;
+// The cover banner renders about 773x220, and object-fit crops most of the
+// height away, so anything much beyond this is downloaded and never seen.
+const IMAGE_MAX_PX = 720;
+const IMAGE_QUALITY = 0.65;
 function readAndResizeImage(file, maxDim, quality) {
   maxDim = maxDim || IMAGE_MAX_PX;
   quality = quality || IMAGE_QUALITY;
