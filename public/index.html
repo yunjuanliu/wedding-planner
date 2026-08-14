@@ -250,6 +250,44 @@
     border: none; color: var(--white); display: flex; align-items: center; justify-content: center;
   }
   .area-cover-banner-remove:hover { background: rgba(29,27,41,0.75); color: var(--white); }
+  /* Guest sub-tabs: a lighter, pill-shaped row so they read as a level below
+     the main tabs rather than competing with them. */
+  .subtabs { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
+  .subtab {
+    border: 1px solid var(--border); background: var(--white); color: var(--ink-soft);
+    border-radius: 999px; padding: 6px 14px; font-size: 13px; font-weight: 500;
+    cursor: pointer; font-family: inherit; min-height: 32px;
+  }
+  .subtab:hover { color: var(--ink); border-color: var(--primary); background: var(--white); }
+  .subtab.active { background: var(--primary); border-color: var(--primary); color: var(--white); font-weight: 600; }
+  .nt-col-label { cursor: pointer; border-bottom: 1px dashed transparent; }
+  .nt-col-label:hover { border-bottom-color: var(--primary); color: var(--primary); }
+  .nt-col-remove { padding: 2px 5px; min-height: 0; font-size: 10px; opacity: 0; transition: opacity 0.12s; }
+  th:hover .nt-col-remove { opacity: 1; }
+  /* Portrait board, matching the proportions of a printed seating sign. */
+  .seat-board-wrap { overflow-x: auto; }
+  .seat-board {
+    position: relative;
+    width: 100%; min-width: 320px; max-width: 760px; margin: 0 auto;
+    aspect-ratio: 2 / 3;
+    background: var(--white);
+    border: 1px solid var(--border); border-radius: 12px;
+    background-image: linear-gradient(var(--border) 1px, transparent 1px),
+                      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 5% 3.3333%;
+    overflow: hidden;
+    touch-action: none;   /* let a drag pan the card, not the page */
+  }
+  .seat-card {
+    position: absolute;
+    background: var(--primary-light); color: var(--primary);
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 3px 8px; font-size: 12px; font-weight: 600;
+    white-space: nowrap; cursor: grab; user-select: none;
+    max-width: 46%; overflow: hidden; text-overflow: ellipsis;
+  }
+  .seat-card.placed { background: var(--white); border-color: var(--primary); }
+  .seat-card.dragging { cursor: grabbing; box-shadow: 0 6px 18px rgba(29,27,41,0.22); z-index: 5; opacity: 0.95; }
   .icon-plus-btn {
     width: 32px; height: 32px; min-height: 32px; padding: 0; flex: 0 0 auto;
     border-radius: 8px; background: var(--primary); color: var(--white); border-color: var(--primary);
@@ -2034,6 +2072,39 @@ const GUEST_SEED = [
 let guests = [];
 
 let guestSearch = "";
+let guestSubTab = "overview";
+// Kept in their own rows rather than inside wedding-guests: the guest list is
+// edited constantly, and craft/seat progress should not ride along with every
+// save of it (nor be lost if a guest save is overwritten).
+let nameTags = {columns: [], done: {}};
+let seating = {positions: {}};
+
+const GUEST_SUBTABS = [
+  {id: "overview", label: "Overview"},
+  {id: "nametags", label: "Name tag creation"},
+  {id: "seating",  label: "Find your seat"},
+];
+
+function firstNameOf(n) {
+  const t = (n || "").trim();
+  return t ? t.split(/\s+/)[0] : "";
+}
+// Every named person in the planner: the household's own name plus each
+// individual row under it. Rows with no name yet are skipped - they would
+// show up as blank cards and blank table rows.
+function allGuestPeople() {
+  const out = [];
+  guests.forEach(g => {
+    if ((g.name || "").trim()) {
+      out.push({key: g.id, first: firstNameOf(g.name), full: g.name.trim(), household: g.name.trim(), isKid: false});
+    }
+    (g.people || []).forEach(pr => {
+      if (!(pr.name || "").trim()) return;
+      out.push({key: pr.id, first: firstNameOf(pr.name), full: pr.name.trim(), household: (g.name || "").trim(), isKid: !!pr.isKid});
+    });
+  });
+  return out;
+}
 // PLACEHOLDER MENU - replace this list with the real dishes. Nothing else
 // needs to change: a saved pick that is no longer on the list is still shown
 // (see dishOptionsHtml), so swapping these out cannot silently drop a choice.
@@ -2138,6 +2209,23 @@ function renderGuests() {
   const p = document.getElementById("panel-guests");
   // Persist the one-time split of plusOne into rows, so it happens once.
   if (guests.map(ensureGuestPeople).some(Boolean)) saveKey("wedding-guests", guests);
+  p.innerHTML = `<div class="subtabs">${GUEST_SUBTABS.map(t =>
+      `<button class="subtab ${guestSubTab === t.id ? "active" : ""}" data-subtab="${t.id}">${t.label}</button>`
+    ).join("")}</div><div id="guest-subpanel"></div>`;
+  p.querySelectorAll("[data-subtab]").forEach(b => {
+    b.addEventListener("click", () => {
+      if (guestSubTab === b.dataset.subtab) return;
+      guestSubTab = b.dataset.subtab;
+      renderGuests();
+    });
+  });
+  if (guestSubTab === "nametags") return renderNameTags();
+  if (guestSubTab === "seating") return renderSeating();
+  renderGuestsOverview();
+}
+
+function renderGuestsOverview() {
+  const p = document.getElementById("guest-subpanel");
   const totalPeople = guests.reduce((s,g) => s + (Number(g.partySize)||0), 0);
   const drivingCount = guests.filter(g => g.transport === "Driving").length;
   const flyingCount = guests.filter(g => g.transport === "Flying").length;
@@ -2343,6 +2431,223 @@ function renderGuests() {
         renderGuests();
       }, "number");
     });
+  });
+}
+
+// ---------- Guest sub-tab: name tag creation ----------
+function ensureNameTagColumns() {
+  if (!nameTags || typeof nameTags !== "object") nameTags = {columns: [], done: {}};
+  if (!Array.isArray(nameTags.columns)) nameTags.columns = [];
+  if (!nameTags.done || typeof nameTags.done !== "object") nameTags.done = {};
+  if (nameTags.columns.length === 0) {
+    nameTags.columns.push({id: uid(), label: "Name Tag Creation"});
+    return true;
+  }
+  return false;
+}
+
+function renderNameTags() {
+  const p = document.getElementById("guest-subpanel");
+  if (ensureNameTagColumns()) saveKey("wedding-nametags", nameTags);
+  const people = allGuestPeople();
+  const cols = nameTags.columns;
+
+  const counts = cols.map(c => people.filter(pr => (nameTags.done[pr.key] || {})[c.id]).length);
+
+  let html = `<div class="stat-row">
+    <div class="stat"><div class="num">${people.length}</div><div class="lbl">Guests</div></div>
+    ${cols.map((c, i) => `<div class="stat"><div class="num">${counts[i]} / ${people.length}</div><div class="lbl">${esc(c.label)}</div></div>`).join("")}
+  </div>
+  <div class="table-wrap">
+    <table class="data-table" style="min-width:${340 + cols.length * 150}px;">
+      <thead><tr>
+        <th style="min-width:150px;">First name</th>
+        ${cols.map(c => `<th style="width:150px; text-align:center;">
+            <span class="nt-col-label" data-col-rename="${c.id}" title="Click to rename">${esc(c.label)}</span>
+            ${cols.length > 1 ? `<button class="icon-btn nt-col-remove" data-col-remove="${c.id}" aria-label="Remove ${esc(c.label)} column" title="Remove column">&#10005;</button>` : ""}
+          </th>`).join("")}
+        <th style="width:56px; text-align:center;">
+          <button class="icon-plus-btn" id="nt-add-col" aria-label="Add a tracking column" title="Add a tracking column">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          </button>
+        </th>
+      </tr></thead>
+      <tbody>`;
+
+  if (people.length === 0) {
+    html += `<tr><td colspan="${cols.length + 2}" class="muted" style="padding:12px;">No named guests yet. Add them in the Overview tab.</td></tr>`;
+  } else {
+    people.forEach(pr => {
+      html += `<tr>
+        <td><span style="font-weight:600;">${esc(pr.first)}</span>
+          ${pr.full !== pr.first ? `<span class="muted" style="font-size:12px;"> ${esc(pr.full.slice(pr.first.length).trim())}</span>` : ""}
+          ${pr.isKid ? '<span style="margin-left:6px; background:#FBE9EF; color:#C23568; border-radius:10px; padding:1px 7px; font-size:11px; font-weight:600;">kid</span>' : ""}
+        </td>
+        ${cols.map(c => `<td style="text-align:center;">
+          <input type="checkbox" data-nt-person="${pr.key}" data-nt-col="${c.id}" ${(nameTags.done[pr.key]||{})[c.id] ? "checked" : ""}
+            aria-label="${esc(c.label)} for ${esc(pr.full)}" style="width:16px; height:16px;" />
+        </td>`).join("")}
+        <td></td>
+      </tr>`;
+    });
+  }
+  html += `</tbody></table></div>`;
+  p.innerHTML = html;
+
+  p.querySelectorAll("[data-nt-person]").forEach(cb => {
+    cb.addEventListener("change", async (e) => {
+      const key = e.currentTarget.dataset.ntPerson, col = e.currentTarget.dataset.ntCol;
+      if (!nameTags.done[key]) nameTags.done[key] = {};
+      if (e.currentTarget.checked) nameTags.done[key][col] = true;
+      else delete nameTags.done[key][col];
+      await saveKey("wedding-nametags", nameTags);
+      // Only the counters need refreshing; a full re-render here would drop
+      // the focus ring while ticking down a column.
+      renderNameTagCounts();
+    });
+  });
+  document.getElementById("nt-add-col").addEventListener("click", () => {
+    openInputModal("New column name", "", async (raw) => {
+      const label = raw.trim();
+      if (!label) return;
+      nameTags.columns.push({id: uid(), label});
+      await saveKey("wedding-nametags", nameTags);
+      renderNameTags();
+    });
+  });
+  p.querySelectorAll("[data-col-rename]").forEach(el => {
+    el.addEventListener("click", () => {
+      const col = nameTags.columns.find(c => c.id === el.dataset.colRename);
+      if (!col) return;
+      openInputModal("Column name", col.label, async (raw) => {
+        const label = raw.trim();
+        if (!label) return;
+        col.label = label;
+        await saveKey("wedding-nametags", nameTags);
+        renderNameTags();
+      });
+    });
+  });
+  p.querySelectorAll("[data-col-remove]").forEach(btn => {
+    btn.addEventListener("click", async (e) => {
+      const id = e.currentTarget.dataset.colRemove;
+      const col = nameTags.columns.find(c => c.id === id);
+      const ticked = allGuestPeople().filter(pr => (nameTags.done[pr.key] || {})[id]).length;
+      if (ticked && !confirm(`Remove the "${col.label}" column? ${ticked} tick${ticked === 1 ? "" : "s"} will be lost.`)) return;
+      nameTags.columns = nameTags.columns.filter(c => c.id !== id);
+      Object.keys(nameTags.done).forEach(k => { delete nameTags.done[k][id]; });
+      await saveKey("wedding-nametags", nameTags);
+      renderNameTags();
+    });
+  });
+}
+// Refreshes just the counter row, so ticking a box does not rebuild the table.
+function renderNameTagCounts() {
+  const people = allGuestPeople();
+  const stats = document.querySelectorAll("#guest-subpanel .stat-row .stat");
+  nameTags.columns.forEach((c, i) => {
+    const el = stats[i + 1];
+    if (el) el.querySelector(".num").textContent =
+      people.filter(pr => (nameTags.done[pr.key] || {})[c.id]).length + " / " + people.length;
+  });
+}
+
+// ---------- Guest sub-tab: find your seat ----------
+// Positions are percentages of the board, not pixels, so a layout arranged on
+// a laptop still reads correctly on a phone.
+const SEAT_TRAY_COLS = 6;
+function seatDefaultPos(index) {
+  const col = index % SEAT_TRAY_COLS, row = Math.floor(index / SEAT_TRAY_COLS);
+  return {x: 3 + col * 15.8, y: 2 + row * 4.2, placed: false};
+}
+function seatPos(key, index) {
+  const saved = seating.positions[key];
+  if (saved && typeof saved.x === "number" && typeof saved.y === "number") {
+    return {x: saved.x, y: saved.y, placed: true};
+  }
+  return seatDefaultPos(index);
+}
+
+function renderSeating() {
+  const p = document.getElementById("guest-subpanel");
+  if (!seating || typeof seating !== "object") seating = {positions: {}};
+  if (!seating.positions) seating.positions = {};
+  const people = allGuestPeople();
+  const placed = people.filter(pr => seating.positions[pr.key]).length;
+
+  p.innerHTML = `
+  <div class="row" style="justify-content:space-between; margin-bottom:10px; gap:10px;">
+    <span class="muted" style="font-size:13px;">
+      <strong id="seat-placed">${placed}</strong> of ${people.length} placed &middot; drag a name anywhere on the board
+    </span>
+    <button id="seat-reset">Reset layout</button>
+  </div>
+  <div class="seat-board-wrap">
+    <div class="seat-board" id="seat-board">
+      ${people.map((pr, i) => {
+        const pos = seatPos(pr.key, i);
+        return `<div class="seat-card${pos.placed ? " placed" : ""}" data-seat-key="${pr.key}"
+          style="left:${pos.x}%; top:${pos.y}%;" title="${esc(pr.full)}${pr.household && pr.household !== pr.full ? " - " + esc(pr.household) : ""}">${esc(pr.first)}</div>`;
+      }).join("")}
+    </div>
+  </div>
+  <p class="muted" style="font-size:12px; margin-top:8px;">
+    Names start stacked at the top. Drag them onto the board to build the seating plan - positions save as you drop them.
+  </p>`;
+
+  const board = document.getElementById("seat-board");
+  let drag = null;
+
+  board.querySelectorAll(".seat-card").forEach(card => {
+    card.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      const rect = board.getBoundingClientRect();
+      const cr = card.getBoundingClientRect();
+      drag = {
+        card,
+        key: card.dataset.seatKey,
+        // Grab offset, so the card does not jump its centre to the cursor.
+        dx: e.clientX - cr.left,
+        dy: e.clientY - cr.top,
+        rect
+      };
+      card.setPointerCapture(e.pointerId);
+      card.classList.add("dragging");
+    });
+    card.addEventListener("pointermove", (e) => {
+      if (!drag || drag.card !== card) return;
+      const r = drag.rect;
+      let x = ((e.clientX - drag.dx - r.left) / r.width) * 100;
+      let y = ((e.clientY - drag.dy - r.top) / r.height) * 100;
+      // Keep a dropped card reachable: never let it leave the board.
+      x = Math.max(0, Math.min(x, 100 - (card.offsetWidth / r.width) * 100));
+      y = Math.max(0, Math.min(y, 100 - (card.offsetHeight / r.height) * 100));
+      card.style.left = x + "%";
+      card.style.top = y + "%";
+    });
+    const finish = async (e) => {
+      if (!drag || drag.card !== card) return;
+      card.classList.remove("dragging");
+      card.classList.add("placed");
+      try { card.releasePointerCapture(e.pointerId); } catch (err) {}
+      seating.positions[drag.key] = {
+        x: parseFloat(card.style.left) || 0,
+        y: parseFloat(card.style.top) || 0
+      };
+      drag = null;
+      const el = document.getElementById("seat-placed");
+      if (el) el.textContent = allGuestPeople().filter(pr => seating.positions[pr.key]).length;
+      await saveKey("wedding-seating", seating);
+    };
+    card.addEventListener("pointerup", finish);
+    card.addEventListener("pointercancel", finish);
+  });
+
+  document.getElementById("seat-reset").addEventListener("click", async () => {
+    if (!confirm("Move every name back to the top of the board? The seating layout will be cleared.")) return;
+    seating.positions = {};
+    await saveKey("wedding-seating", seating);
+    renderSeating();
   });
 }
 
@@ -3855,6 +4160,11 @@ function renderDashboard() {
     await saveKey("wedding-timeline-sections", timelineSections);
   }
   helperTags = (await loadKey("wedding-helper-tags")) || [];
+  nameTags = (await loadKey("wedding-nametags")) || {columns: [], done: {}};
+  if (!Array.isArray(nameTags.columns)) nameTags.columns = [];
+  if (!nameTags.done || typeof nameTags.done !== "object") nameTags.done = {};
+  seating = (await loadKey("wedding-seating")) || {positions: {}};
+  if (!seating.positions || typeof seating.positions !== "object") seating.positions = {};
   budget = (await loadKey("wedding-budget")) || { total: 0, vendors: [], expenses: [] };
   if (!budget.vendors) budget.vendors = [];
   if (!budget.expenses) budget.expenses = [];
