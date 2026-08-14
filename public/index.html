@@ -268,8 +268,11 @@
   .seat-board-wrap { overflow-x: auto; }
   .seat-board {
     position: relative;
-    width: 100%; min-width: 320px; max-width: 760px; margin: 0 auto;
-    aspect-ratio: 2 / 3;
+    /* Fills the ten content columns rather than sitting in a narrow strip:
+       86 names need the room, and the extra width is what makes a table plan
+       legible. Still portrait, so it matches a printed seating sign. */
+    width: 100%; min-width: 320px; margin: 0 auto;
+    aspect-ratio: 3 / 4;
     background: var(--white);
     border: 1px solid var(--border); border-radius: 12px;
     background-image: linear-gradient(var(--border) 1px, transparent 1px),
@@ -1268,8 +1271,10 @@ async function downloadBackup() {
   };
 
   try {
-    // Snapshots are copies of these same rows; excluded server-side so the
-    // download stays small rather than fetching megabytes only to drop them.
+    // Snapshots are copies of these same rows, so they are excluded server-side
+    // rather than fetched only to be dropped. Cover images are NOT excluded:
+    // this file is the thing you restore from, and a backup missing the photos
+    // is not a backup of everything.
     const r = await sbFetch(SUPABASE_URL + "/rest/v1/wedding_store?select=key,value&key=not.like." +
       encodeURIComponent(SNAPSHOT_PREFIX + "*"), { headers: SB_HEADERS });
     if (r.ok) {
@@ -1388,7 +1393,8 @@ async function loadStore() {
     // Snapshot rows are whole copies of everything else, cover images included,
     // so pulling them in here made the payload 4MB and the first paint depend
     // on downloading data the app never reads. Leave them on the server.
-    const r = await sbFetch(SUPABASE_URL + "/rest/v1/wedding_store?select=key,value,updated_at&key=not.like." + encodeURIComponent(SNAPSHOT_PREFIX + "*"), { headers: SB_HEADERS });
+    const r = await sbFetch(SUPABASE_URL + "/rest/v1/wedding_store?select=key,value,updated_at&key=not.like." + encodeURIComponent(SNAPSHOT_PREFIX + "*") +
+      "&key=not.like." + encodeURIComponent(AREA_IMAGE_PREFIX + "*"), { headers: SB_HEADERS });
     if (r.ok) {
       (await r.json()).forEach(row => {
         storeCache[row.key] = { value: row.value, ts: Date.parse(row.updated_at) || 0 };
@@ -1539,6 +1545,10 @@ async function writeDailySnapshotIfNeeded() {
     }
   }
 
+  // Cover images are absent here by design: storeCache no longer carries them,
+  // and copying them into ten slots is exactly what made the daily snapshot
+  // slow the app down. They sit in their own rows, which nothing overwrites
+  // wholesale, and the downloadable backup does include them.
   const data = {};
   Object.keys(store).forEach(k => {
     if (k.indexOf(SNAPSHOT_PREFIX) === 0) return;
@@ -2677,10 +2687,12 @@ function tableSvg(type) {
 
 // Positions are percentages of the board, not pixels, so a layout arranged on
 // a laptop still reads correctly on a phone.
-const SEAT_TRAY_COLS = 6;
+// Eight across on the wider board, so 86 unplaced names stack in eleven rows
+// instead of fifteen and leave more clear board to arrange them on.
+const SEAT_TRAY_COLS = 8;
 function seatDefaultPos(index) {
   const col = index % SEAT_TRAY_COLS, row = Math.floor(index / SEAT_TRAY_COLS);
-  return {x: 3 + col * 15.8, y: 2 + row * 4.2, placed: false};
+  return {x: 2 + col * 12.2, y: 1.5 + row * 4.2, placed: false};
 }
 function seatPos(key, index) {
   const saved = seating.positions[key];
@@ -3268,23 +3280,80 @@ document.getElementById("area-modal-todo-new").addEventListener("keydown", (e) =
 });
 
 // --- Cover image ---
-function renderAreaCoverImage() {
+// Each cover lives in its own row, excluded from the initial load and fetched
+// only when its area is opened. Held inline in wedding-activity-areas they
+// were 328KB of a 362KB startup payload against 34KB of planning data, and
+// every added photo pushed the first paint closer to the timeout that has
+// already shown an empty planner twice.
+const AREA_IMAGE_PREFIX = "area-image::";
+function areaImageKey(areaId) { return AREA_IMAGE_PREFIX + areaId; }
+const areaImageCache = {};
+
+async function loadAreaImage(areaId) {
+  if (Object.prototype.hasOwnProperty.call(areaImageCache, areaId)) return areaImageCache[areaId];
+  try {
+    const r = await sbFetch(SUPABASE_URL + "/rest/v1/wedding_store?select=value&key=eq." +
+      encodeURIComponent(areaImageKey(areaId)), { headers: SB_HEADERS });
+    if (!r.ok) return null;
+    const rows = await r.json();
+    const val = rows[0] && rows[0].value;
+    areaImageCache[areaId] = val && val.dataUrl ? val.dataUrl : null;
+    return areaImageCache[areaId];
+  } catch (e) { return null; }
+}
+async function saveAreaImage(areaId, dataUrl) {
+  areaImageCache[areaId] = dataUrl;
+  await saveKey(areaImageKey(areaId), dataUrl ? {dataUrl} : null);
+}
+
+// Renders whatever is known now, then fills the picture in when it arrives -
+// the modal must not sit blank waiting on a network round trip.
+async function renderAreaCoverImage() {
   const found = currentArea();
   if (!found) return;
+  const areaId = found.area.id;
   const img = document.getElementById("area-modal-cover-img");
   const placeholder = document.getElementById("area-modal-cover-placeholder");
   const removeBtn = document.getElementById("area-modal-cover-remove");
-  if (found.area.coverImage) {
-    img.src = found.area.coverImage;
-    img.style.display = "";
-    placeholder.style.display = "none";
-    removeBtn.style.display = "";
-  } else {
-    img.style.display = "none";
-    img.removeAttribute("src");
-    placeholder.style.display = "";
-    removeBtn.style.display = "none";
+  const show = (src) => {
+    // The modal may have moved on to another area while the fetch was in
+    // flight; showing this picture then would put it on the wrong area.
+    if (!openAreaRef || openAreaRef.areaId !== areaId) return;
+    if (src) {
+      img.src = src;
+      img.style.display = "";
+      placeholder.style.display = "none";
+      removeBtn.style.display = "";
+    } else {
+      img.style.display = "none";
+      img.removeAttribute("src");
+      placeholder.style.display = "";
+      removeBtn.style.display = "none";
+    }
+  };
+  const cached = Object.prototype.hasOwnProperty.call(areaImageCache, areaId) ? areaImageCache[areaId] : undefined;
+  show(cached === undefined ? (found.area.hasCover ? img.src || null : null) : cached);
+  if (cached === undefined) show(await loadAreaImage(areaId));
+}
+
+// One-time move of the covers already sitting inside wedding-activity-areas.
+// Guarded like every other sweep: on a failed load this would strip images
+// from a list it only thinks is empty.
+async function migrateAreaImagesOut() {
+  if (!storeLoadedOk || !Array.isArray(activities) || activities.length === 0) return 0;
+  let moved = 0;
+  for (const s of activities) {
+    for (const a of (s.areas || [])) {
+      if (!a.coverImage) continue;
+      await saveKey(areaImageKey(a.id), {dataUrl: a.coverImage});
+      areaImageCache[a.id] = a.coverImage;
+      delete a.coverImage;
+      a.hasCover = true;
+      moved++;
+    }
   }
+  if (moved) await saveKey("wedding-activity-areas", activities);
+  return moved;
 }
 // Every image is stored inline in the row it belongs to and downloaded on
 // every page load, so its size is a reliability question, not a cosmetic one.
@@ -3334,9 +3403,12 @@ document.getElementById("area-modal-cover-input").addEventListener("change", asy
   if (!found) return;
   try {
     const {dataUrl, width, height} = await readAndResizeImage(file);
-    found.area.coverImage = dataUrl;
+    // Dimensions stay on the area (a few bytes, needed for the Word export);
+    // the picture itself goes to its own row.
+    found.area.hasCover = true;
     found.area.coverImageW = width;
     found.area.coverImageH = height;
+    await saveAreaImage(found.area.id, dataUrl);
     await saveKey("wedding-activity-areas", activities);
     renderAreaCoverImage();
   } catch (err) {
@@ -3347,9 +3419,10 @@ document.getElementById("area-modal-cover-remove").addEventListener("click", asy
   e.stopPropagation();
   const found = currentArea();
   if (!found) return;
-  delete found.area.coverImage;
+  delete found.area.hasCover;
   delete found.area.coverImageW;
   delete found.area.coverImageH;
+  await saveAreaImage(found.area.id, null);
   await saveKey("wedding-activity-areas", activities);
   renderAreaCoverImage();
 });
@@ -3450,8 +3523,9 @@ async function exportAreaDocx(section, area) {
   if (area.assignee) subtitleParts.push(`Assignee: ${area.assignee}`);
   children.push(new Paragraph({text: subtitleParts.join(" · "), spacing: {after: 200}}));
 
-  if (area.coverImage) {
-    const bytes = dataUrlToUint8Array(area.coverImage);
+  const coverForDoc = await loadAreaImage(area.id);
+  if (coverForDoc) {
+    const bytes = dataUrlToUint8Array(coverForDoc);
     const w = area.coverImageW || 600, h = area.coverImageH || 400;
     const docWidth = 420;
     const docHeight = Math.round(docWidth * (h / w));
@@ -4487,6 +4561,9 @@ function renderDashboard() {
   // Last, so the day's copy reflects anything that just synced up.
   // Before the snapshot, so the day's copy is not a record of the leftovers.
   pruneOrphanGuestData();
+  // Moves any cover still inline out to its own row, then re-renders so the
+  // Activity tab reflects the slimmed-down list.
+  migrateAreaImagesOut().then(n => { if (n) renderActivities(); });
 
   writeDailySnapshotIfNeeded();
 })();
