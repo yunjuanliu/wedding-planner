@@ -2747,6 +2747,10 @@ function renderSeating() {
   <p class="muted" style="font-size:12px; margin-top:8px;">
     Drag a name onto the board to seat it. Drag across empty board to select several at once, or shift-click to add and remove
     individual ones, then drag any of them to move the whole group. Select a single table to rotate or resize it.
+    <strong>${navigator.platform.indexOf("Mac") === 0 ? "⌘Z" : "Ctrl+Z"}</strong> undoes the last change on this board
+    (<strong>${navigator.platform.indexOf("Mac") === 0 ? "⇧⌘Z" : "Ctrl+Y"}</strong> redoes).
+    With tables selected: <strong>${navigator.platform.indexOf("Mac") === 0 ? "⌘C / ⌘V" : "Ctrl+C / Ctrl+V"}</strong> to copy and paste,
+    <strong>Delete</strong> to remove, <strong>Esc</strong> to deselect.
   </p>`;
 
   const board = document.getElementById("seat-board");
@@ -2796,7 +2800,7 @@ function renderSeating() {
       const cr = item.getBoundingClientRect();
       const cx = cr.left + cr.width / 2, cy = cr.top + cr.height / 2;
       mode = handle.dataset.handle;
-      start = {el: item, t, cx, cy, w: t.w, rot: t.rot || 0,
+      start = {el: item, t, cx, cy, w: t.w, rot: t.rot || 0, pre: seatSnapshot(),
                dist: Math.hypot(e.clientX - cx, e.clientY - cy),
                ang: Math.atan2(e.clientY - cy, e.clientX - cx) * 180 / Math.PI};
       board.setPointerCapture(e.pointerId);
@@ -2823,7 +2827,7 @@ function renderSeating() {
                 b: boundsFor(el, id, r)};
       }).filter(Boolean);
       mode = "move";
-      start = {r, px: e.clientX, py: e.clientY, items};
+      start = {r, px: e.clientX, py: e.clientY, items, pre: seatSnapshot()};
       items.forEach(it => it.el.classList.add("dragging"));
       board.setPointerCapture(e.pointerId);
       return;
@@ -2889,6 +2893,9 @@ function renderSeating() {
     try { board.releasePointerCapture(e.pointerId); } catch (err) {}
 
     if (finished === "move") {
+      // Only a drag that moved is worth an undo entry; a plain click to select
+      // would otherwise fill the history with no-ops.
+      if (moved) seatPushUndo(start.pre);
       start.items.forEach(it => {
         it.el.classList.remove("dragging");
         const x = parseFloat(it.el.style.left) || 0, y = parseFloat(it.el.style.top) || 0;
@@ -2917,6 +2924,7 @@ function renderSeating() {
       marquee = null;
       paintSelection();
     } else {
+      if (moved && start && start.pre) seatPushUndo(start.pre);
       await save();
     }
   };
@@ -2927,6 +2935,7 @@ function renderSeating() {
     btn.addEventListener("click", async (e) => {
       e.stopPropagation();
       const id = e.currentTarget.dataset.tableDel;
+      seatPushUndo();
       seating.tables = seating.tables.filter(x => x.id !== id);
       seatSel.delete(selId("t", id));
       await save();
@@ -2936,6 +2945,7 @@ function renderSeating() {
   document.getElementById("seat-add-table").addEventListener("click", async () => {
     const type = tableTypeById(document.getElementById("seat-table-type").value);
     seating.tables = seating.tables || [];
+    seatPushUndo();
     const t = {id: uid(), type: type.id, x: 50, y: 45, w: type.w, rot: 0};
     seating.tables.push(t);
     seatSel = new Set([selId("t", t.id)]);
@@ -2946,12 +2956,140 @@ function renderSeating() {
   document.getElementById("seat-reset").addEventListener("click", async () => {
     const nTables = (seating.tables || []).length;
     if (!confirm(`Move every name back to the top of the board${nTables ? ` and remove ${nTables} table${nTables === 1 ? "" : "s"}` : ""}? The seating layout will be cleared.`)) return;
+    seatPushUndo();
     seating.positions = {};
     seating.tables = [];
     seatSel.clear();
     await save();
     renderSeating();
   });
+}
+
+// Copy/paste and delete for tables. Bound once at the document rather than on
+// each render, which would stack a new listener every time the board redraws.
+// Kept in memory rather than the system clipboard: a table is a shape in this
+// plan, not something another app could paste.
+let seatClipboard = [];
+// Undo history for the board. Session-only and capped: it holds whole copies
+// of a small object (positions + tables), which is far simpler to get right
+// than replaying inverse operations, and the board is the one place here
+// where a stray keystroke or drag can undo minutes of arranging.
+let seatUndo = [], seatRedo = [];
+const SEAT_UNDO_MAX = 50;
+function seatSnapshot() {
+  return JSON.stringify({positions: seating.positions || {}, tables: seating.tables || []});
+}
+// Call with the state as it was BEFORE the change.
+function seatPushUndo(before) {
+  if (before === undefined) before = seatSnapshot();
+  if (seatUndo.length && seatUndo[seatUndo.length - 1] === before) return;
+  seatUndo.push(before);
+  if (seatUndo.length > SEAT_UNDO_MAX) seatUndo.shift();
+  seatRedo.length = 0;   // a fresh edit invalidates the redo branch
+}
+async function seatApplyState(json) {
+  const st = JSON.parse(json);
+  seating.positions = st.positions || {};
+  seating.tables = st.tables || [];
+  seatSel.clear();
+  await saveKey("wedding-seating", seating);
+  renderSeating();
+}
+async function seatUndoStep() {
+  if (!seatUndo.length) return false;
+  seatRedo.push(seatSnapshot());
+  await seatApplyState(seatUndo.pop());
+  return true;
+}
+async function seatRedoStep() {
+  if (!seatRedo.length) return false;
+  seatUndo.push(seatSnapshot());
+  await seatApplyState(seatRedo.pop());
+  return true;
+}
+function seatShortcutsAllowed() {
+  if (guestSubTab !== "seating") return false;
+  if (!document.getElementById("seat-board")) return false;
+  const panel = document.getElementById("panel-guests");
+  if (!panel || !panel.classList.contains("active")) return false;
+  if (document.querySelector(".modal-overlay.open")) return false;
+  // Never steal a keystroke meant for a field.
+  const ae = document.activeElement;
+  if (ae && (/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName) || ae.isContentEditable)) return false;
+  return true;
+}
+document.addEventListener("keydown", async (e) => {
+  if (!seatShortcutsAllowed()) return;
+  const mod = e.metaKey || e.ctrlKey;
+  const selectedTables = () => [...seatSel].filter(s => s.startsWith("t:")).map(s => s.slice(2));
+
+  if (e.key === "Escape") {
+    if (!seatSel.size) return;
+    seatSel.clear();
+    renderSeating();
+    return;
+  }
+  if (mod && (e.key === "z" || e.key === "Z") && !e.shiftKey) {
+    e.preventDefault();
+    seatFlash((await seatUndoStep()) ? "Undone" : "Nothing to undo");
+    return;
+  }
+  if (mod && ((e.key === "z" || e.key === "Z") && e.shiftKey || e.key === "y" || e.key === "Y")) {
+    e.preventDefault();
+    seatFlash((await seatRedoStep()) ? "Redone" : "Nothing to redo");
+    return;
+  }
+  if (mod && (e.key === "c" || e.key === "C")) {
+    const ids = selectedTables();
+    if (!ids.length) return;
+    e.preventDefault();
+    seatClipboard = seating.tables.filter(t => ids.indexOf(t.id) !== -1).map(t => ({...t}));
+    seatFlash(`${seatClipboard.length} table${seatClipboard.length === 1 ? "" : "s"} copied`);
+    return;
+  }
+  if (mod && (e.key === "v" || e.key === "V")) {
+    if (!seatClipboard.length) return;
+    e.preventDefault();
+    seatPushUndo();
+    // Offset the copies so they do not land exactly on the originals and look
+    // like nothing happened.
+    const made = seatClipboard.map(t => ({
+      ...t, id: uid(),
+      x: Math.max(0, Math.min(100, t.x + 4)),
+      y: Math.max(0, Math.min(100, t.y + 4))
+    }));
+    seating.tables = (seating.tables || []).concat(made);
+    seatSel = new Set(made.map(t => "t:" + t.id));
+    // Paste again and the next copies step further out rather than restacking.
+    seatClipboard = made.map(t => ({...t}));
+    await saveKey("wedding-seating", seating);
+    renderSeating();
+    seatFlash(`${made.length} table${made.length === 1 ? "" : "s"} pasted`);
+    return;
+  }
+  if (e.key === "Delete" || e.key === "Backspace") {
+    const ids = selectedTables();
+    if (!ids.length) return;
+    // Backspace navigates back in some setups.
+    e.preventDefault();
+    seatPushUndo();
+    seating.tables = seating.tables.filter(t => ids.indexOf(t.id) === -1);
+    ids.forEach(id => seatSel.delete("t:" + id));
+    await saveKey("wedding-seating", seating);
+    renderSeating();
+    seatFlash(`${ids.length} table${ids.length === 1 ? "" : "s"} removed`);
+  }
+});
+// Brief confirmation, so a keystroke that changed something off-screen is not silent.
+function seatFlash(msg) {
+  const el = document.getElementById("seat-selinfo");
+  if (!el) return;
+  el.textContent = msg;
+  clearTimeout(seatFlash._t);
+  seatFlash._t = setTimeout(() => {
+    const n = seatSel.size;
+    el.textContent = n > 1 ? `${n} selected - drag to move together` : "";
+  }, 1600);
 }
 
 const AREA_SEED = [
