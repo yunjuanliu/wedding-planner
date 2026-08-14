@@ -308,6 +308,13 @@
     font-size: 10px; line-height: 1; cursor: pointer;
   }
   .seat-table-del:hover { background: #B3253C; }
+  /* Group selection */
+  .seat-card.sel { outline: 2px solid var(--primary); outline-offset: 1px; background: var(--primary); color: var(--white); }
+  .seat-table.sel { outline: 1.5px dashed var(--primary); outline-offset: 4px; }
+  .seat-marquee {
+    position: absolute; z-index: 4; pointer-events: none;
+    border: 1.5px dashed var(--primary); background: rgba(110,76,217,0.10); border-radius: 3px;
+  }
   .icon-plus-btn {
     width: 32px; height: 32px; min-height: 32px; padding: 0; flex: 0 0 auto;
     border-radius: 8px; background: var(--primary); color: var(--white); border-color: var(--primary);
@@ -2629,7 +2636,7 @@ function seatPos(key, index) {
   return seatDefaultPos(index);
 }
 
-let seatSelectedTable = null;
+let seatSel = new Set();   // ids like c:<guestKey> / t:<tableId>
 function renderSeating() {
   const p = document.getElementById("guest-subpanel");
   if (!seating || typeof seating !== "object") seating = {positions: {}, tables: []};
@@ -2642,6 +2649,7 @@ function renderSeating() {
   <div class="row" style="justify-content:space-between; margin-bottom:10px; gap:10px;">
     <span class="muted" style="font-size:13px;">
       <strong id="seat-placed">${placed}</strong> of ${people.length} placed &middot; drag a name anywhere on the board
+      <span id="seat-selinfo" style="color:var(--primary); font-weight:600; margin-left:6px;"></span>
     </span>
     <div class="row" style="gap:8px;">
       <select id="seat-table-type" style="min-width:150px;">
@@ -2655,7 +2663,7 @@ function renderSeating() {
     <div class="seat-board" id="seat-board">
       ${(seating.tables || []).map(t => {
         const type = tableTypeById(t.type);
-        return `<div class="seat-table${seatSelectedTable === t.id ? " selected" : ""}" data-table-id="${t.id}"
+        return `<div class="seat-table${seatSel.size === 1 && seatSel.has("t:" + t.id) ? " selected" : ""}${seatSel.has("t:" + t.id) ? " sel" : ""}" data-table-id="${t.id}"
           style="left:${t.x}%; top:${t.y}%; width:${t.w}%; transform:translate(-50%,-50%) rotate(${t.rot || 0}deg);">
           ${tableSvg(type)}
           <span class="seat-table-handle rotate" data-handle="rotate" title="Drag to rotate"></span>
@@ -2665,155 +2673,208 @@ function renderSeating() {
       }).join("")}
       ${people.map((pr, i) => {
         const pos = seatPos(pr.key, i);
-        return `<div class="seat-card${pos.placed ? " placed" : ""}" data-seat-key="${pr.key}"
+        return `<div class="seat-card${pos.placed ? " placed" : ""}${seatSel.has("c:" + pr.key) ? " sel" : ""}" data-seat-key="${pr.key}"
           style="left:${pos.x}%; top:${pos.y}%;" title="${esc(pr.full)}${pr.household && pr.household !== pr.full ? " - " + esc(pr.household) : ""}">${esc(pr.first)}</div>`;
       }).join("")}
     </div>
   </div>
   <p class="muted" style="font-size:12px; margin-top:8px;">
-    Drag a name onto the board to seat it. Click a table to select it, then drag the round handle to rotate or the square one to resize.
+    Drag a name onto the board to seat it. Drag across empty board to select several at once, or shift-click to add and remove
+    individual ones, then drag any of them to move the whole group. Select a single table to rotate or resize it.
   </p>`;
 
   const board = document.getElementById("seat-board");
-  let drag = null;
+  const save = () => saveKey("wedding-seating", seating);
+  const selId = (kind, id) => kind + ":" + id;
+  const elFor = (sid) => {
+    const [kind, id] = [sid.slice(0, 1), sid.slice(2)];
+    return kind === "c" ? board.querySelector(`[data-seat-key="${id}"]`)
+                        : board.querySelector(`[data-table-id="${id}"]`);
+  };
+  const paintSelection = () => {
+    board.querySelectorAll(".seat-card, .seat-table").forEach(el => {
+      const sid = el.dataset.seatKey ? selId("c", el.dataset.seatKey) : selId("t", el.dataset.tableId);
+      el.classList.toggle("sel", seatSel.has(sid));
+    });
+    // Rotate/scale handles only make sense on exactly one table.
+    const onlyTable = seatSel.size === 1 && [...seatSel][0].startsWith("t:");
+    board.querySelectorAll(".seat-table").forEach(el => {
+      el.classList.toggle("selected", onlyTable && seatSel.has(selId("t", el.dataset.tableId)));
+    });
+    const bar = document.getElementById("seat-selinfo");
+    if (bar) bar.textContent = seatSel.size > 1 ? `${seatSel.size} selected - drag to move together` : "";
+  };
+  paintSelection();
 
-  // ----- tables: move, rotate, scale -----
-  const saveTables = () => saveKey("wedding-seating", seating);
-  board.querySelectorAll(".seat-table").forEach(el => {
-    const t = seating.tables.find(x => x.id === el.dataset.tableId);
-    if (!t) return;
-    let mode = null, start = null;
+  let mode = null, start = null, marquee = null, moved = false;
 
-    const begin = (e) => {
-      const handle = e.target.closest("[data-handle]");
-      if (e.target.closest("[data-table-del]")) return;
+  const boundsFor = (el, sid, r) => {
+    // Cards are positioned by their top-left, tables by their centre.
+    if (sid.startsWith("t:")) return {minX: 0, maxX: 100, minY: 0, maxY: 100};
+    return {minX: 0, maxX: 100 - (el.offsetWidth / r.width) * 100,
+            minY: 0, maxY: 100 - (el.offsetHeight / r.height) * 100};
+  };
+
+  board.addEventListener("pointerdown", (e) => {
+    if (e.target.closest("[data-table-del]")) return;
+    const handle = e.target.closest("[data-handle]");
+    const item = e.target.closest(".seat-card, .seat-table");
+    const r = board.getBoundingClientRect();
+    moved = false;
+
+    if (handle && item) {
+      // Single-table rotate / resize.
+      const t = seating.tables.find(x => x.id === item.dataset.tableId);
+      if (!t) return;
       e.preventDefault();
-      e.stopPropagation();
-      seatSelectedTable = t.id;
-      board.querySelectorAll(".seat-table").forEach(o => o.classList.toggle("selected", o === el));
-      const br = board.getBoundingClientRect();
-      const cr = el.getBoundingClientRect();
+      const cr = item.getBoundingClientRect();
       const cx = cr.left + cr.width / 2, cy = cr.top + cr.height / 2;
-      mode = handle ? handle.dataset.handle : "move";
-      start = {
-        br, cx, cy,
-        dx: e.clientX - cx, dy: e.clientY - cy,
-        w: t.w, rot: t.rot || 0,
-        dist: Math.hypot(e.clientX - cx, e.clientY - cy),
-        ang: Math.atan2(e.clientY - cy, e.clientX - cx) * 180 / Math.PI
-      };
-      el.setPointerCapture(e.pointerId);
-      el.classList.add("dragging");
-    };
+      mode = handle.dataset.handle;
+      start = {el: item, t, cx, cy, w: t.w, rot: t.rot || 0,
+               dist: Math.hypot(e.clientX - cx, e.clientY - cy),
+               ang: Math.atan2(e.clientY - cy, e.clientX - cx) * 180 / Math.PI};
+      board.setPointerCapture(e.pointerId);
+      return;
+    }
 
-    const moveIt = (e) => {
-      if (!mode) return;
-      const r = start.br;
-      if (mode === "move") {
-        t.x = Math.max(0, Math.min(100, ((e.clientX - start.dx - r.left) / r.width) * 100));
-        t.y = Math.max(0, Math.min(100, ((e.clientY - start.dy - r.top) / r.height) * 100));
-        el.style.left = t.x + "%";
-        el.style.top = t.y + "%";
-      } else if (mode === "rotate") {
-        const a = Math.atan2(e.clientY - start.cy, e.clientX - start.cx) * 180 / Math.PI;
-        let next = start.rot + (a - start.ang);
-        // Snap to the square angles, which is what a floor plan almost always wants.
-        const near = Math.round(next / 15) * 15;
-        if (Math.abs(next - near) < 4) next = near;
-        t.rot = Math.round(next * 10) / 10;
-        el.style.transform = `translate(-50%,-50%) rotate(${t.rot}deg)`;
-      } else if (mode === "scale") {
-        // Scale from the distance to the centre, so it behaves the same at
-        // any rotation instead of fighting the transform.
-        const d = Math.hypot(e.clientX - start.cx, e.clientY - start.cy);
-        const factor = start.dist > 4 ? d / start.dist : 1;
-        t.w = Math.max(6, Math.min(95, Math.round(start.w * factor * 10) / 10));
-        el.style.width = t.w + "%";
+    if (item) {
+      const sid = item.dataset.seatKey ? selId("c", item.dataset.seatKey) : selId("t", item.dataset.tableId);
+      const additive = e.shiftKey || e.metaKey || e.ctrlKey;
+      if (additive) {
+        if (seatSel.has(sid)) seatSel.delete(sid); else seatSel.add(sid);
+      } else if (!seatSel.has(sid)) {
+        seatSel.clear();
+        seatSel.add(sid);
       }
-    };
+      paintSelection();
+      if (!seatSel.has(sid)) return;   // shift-click that removed it: nothing to drag
+      e.preventDefault();
+      // Snapshot every selected item, so the whole group moves as one.
+      const items = [...seatSel].map(id => {
+        const el = elFor(id);
+        if (!el) return null;
+        return {id, el, x: parseFloat(el.style.left) || 0, y: parseFloat(el.style.top) || 0,
+                b: boundsFor(el, id, r)};
+      }).filter(Boolean);
+      mode = "move";
+      start = {r, px: e.clientX, py: e.clientY, items};
+      items.forEach(it => it.el.classList.add("dragging"));
+      board.setPointerCapture(e.pointerId);
+      return;
+    }
 
-    const end = async (e) => {
-      if (!mode) return;
-      mode = null;
-      el.classList.remove("dragging");
-      try { el.releasePointerCapture(e.pointerId); } catch (err) {}
-      await saveTables();
-    };
-
-    el.addEventListener("pointerdown", begin);
-    el.addEventListener("pointermove", moveIt);
-    el.addEventListener("pointerup", end);
-    el.addEventListener("pointercancel", end);
+    // Empty board: rubber-band select.
+    e.preventDefault();
+    if (!(e.shiftKey || e.metaKey || e.ctrlKey)) { seatSel.clear(); paintSelection(); }
+    mode = "marquee";
+    start = {r, x0: e.clientX - r.left, y0: e.clientY - r.top};
+    marquee = document.createElement("div");
+    marquee.className = "seat-marquee";
+    board.appendChild(marquee);
+    board.setPointerCapture(e.pointerId);
   });
+
+  board.addEventListener("pointermove", (e) => {
+    if (!mode) return;
+    moved = true;
+    if (mode === "move") {
+      const r = start.r;
+      let dx = ((e.clientX - start.px) / r.width) * 100;
+      let dy = ((e.clientY - start.py) / r.height) * 100;
+      // Clamp the shared delta so no member of the group leaves the board.
+      start.items.forEach(it => {
+        dx = Math.max(it.b.minX - it.x, Math.min(dx, it.b.maxX - it.x));
+        dy = Math.max(it.b.minY - it.y, Math.min(dy, it.b.maxY - it.y));
+      });
+      start.items.forEach(it => {
+        it.el.style.left = (it.x + dx) + "%";
+        it.el.style.top = (it.y + dy) + "%";
+      });
+    } else if (mode === "rotate") {
+      const a = Math.atan2(e.clientY - start.cy, e.clientX - start.cx) * 180 / Math.PI;
+      let next = start.rot + (a - start.ang);
+      // Snap to the square angles, which is what a floor plan almost always wants.
+      const near = Math.round(next / 15) * 15;
+      if (Math.abs(next - near) < 4) next = near;
+      start.t.rot = Math.round(next * 10) / 10;
+      start.el.style.transform = `translate(-50%,-50%) rotate(${start.t.rot}deg)`;
+    } else if (mode === "scale") {
+      // Scale from the distance to the centre, so it behaves the same at any
+      // rotation instead of fighting the transform.
+      const d = Math.hypot(e.clientX - start.cx, e.clientY - start.cy);
+      const factor = start.dist > 4 ? d / start.dist : 1;
+      start.t.w = Math.max(6, Math.min(95, Math.round(start.w * factor * 10) / 10));
+      start.el.style.width = start.t.w + "%";
+    } else if (mode === "marquee") {
+      const r = start.r;
+      const x = Math.max(0, Math.min(e.clientX - r.left, r.width));
+      const y = Math.max(0, Math.min(e.clientY - r.top, r.height));
+      marquee.style.left = Math.min(start.x0, x) + "px";
+      marquee.style.top = Math.min(start.y0, y) + "px";
+      marquee.style.width = Math.abs(x - start.x0) + "px";
+      marquee.style.height = Math.abs(y - start.y0) + "px";
+    }
+  });
+
+  const endDrag = async (e) => {
+    if (!mode) return;
+    const finished = mode;
+    mode = null;
+    try { board.releasePointerCapture(e.pointerId); } catch (err) {}
+
+    if (finished === "move") {
+      start.items.forEach(it => {
+        it.el.classList.remove("dragging");
+        const x = parseFloat(it.el.style.left) || 0, y = parseFloat(it.el.style.top) || 0;
+        if (it.id.startsWith("t:")) {
+          const t = seating.tables.find(x2 => x2.id === it.id.slice(2));
+          if (t) { t.x = x; t.y = y; }
+        } else {
+          it.el.classList.add("placed");
+          seating.positions[it.id.slice(2)] = {x, y};
+        }
+      });
+      const el = document.getElementById("seat-placed");
+      if (el) el.textContent = allGuestPeople().filter(pr => seating.positions[pr.key]).length;
+      await save();
+    } else if (finished === "marquee") {
+      const mr = marquee.getBoundingClientRect();
+      // A click with no drag should not select the whole board.
+      if (moved && mr.width > 3 && mr.height > 3) {
+        board.querySelectorAll(".seat-card, .seat-table").forEach(el => {
+          const b = el.getBoundingClientRect();
+          const hit = b.left < mr.right && b.right > mr.left && b.top < mr.bottom && b.bottom > mr.top;
+          if (hit) seatSel.add(el.dataset.seatKey ? selId("c", el.dataset.seatKey) : selId("t", el.dataset.tableId));
+        });
+      }
+      marquee.remove();
+      marquee = null;
+      paintSelection();
+    } else {
+      await save();
+    }
+  };
+  board.addEventListener("pointerup", endDrag);
+  board.addEventListener("pointercancel", endDrag);
 
   board.querySelectorAll("[data-table-del]").forEach(btn => {
     btn.addEventListener("click", async (e) => {
       e.stopPropagation();
-      seating.tables = seating.tables.filter(x => x.id !== e.currentTarget.dataset.tableDel);
-      seatSelectedTable = null;
-      await saveTables();
+      const id = e.currentTarget.dataset.tableDel;
+      seating.tables = seating.tables.filter(x => x.id !== id);
+      seatSel.delete(selId("t", id));
+      await save();
       renderSeating();
     });
-  });
-  // Clicking bare board deselects, so the handles stop covering the layout.
-  board.addEventListener("pointerdown", (e) => {
-    if (e.target === board && seatSelectedTable) {
-      seatSelectedTable = null;
-      board.querySelectorAll(".seat-table").forEach(o => o.classList.remove("selected"));
-    }
   });
   document.getElementById("seat-add-table").addEventListener("click", async () => {
     const type = tableTypeById(document.getElementById("seat-table-type").value);
     seating.tables = seating.tables || [];
-    seating.tables.push({id: uid(), type: type.id, x: 50, y: 45, w: type.w, rot: 0});
-    seatSelectedTable = seating.tables[seating.tables.length - 1].id;
-    await saveTables();
+    const t = {id: uid(), type: type.id, x: 50, y: 45, w: type.w, rot: 0};
+    seating.tables.push(t);
+    seatSel = new Set([selId("t", t.id)]);
+    await save();
     renderSeating();
-  });
-
-  board.querySelectorAll(".seat-card").forEach(card => {
-    card.addEventListener("pointerdown", (e) => {
-      e.preventDefault();
-      const rect = board.getBoundingClientRect();
-      const cr = card.getBoundingClientRect();
-      drag = {
-        card,
-        key: card.dataset.seatKey,
-        // Grab offset, so the card does not jump its centre to the cursor.
-        dx: e.clientX - cr.left,
-        dy: e.clientY - cr.top,
-        rect
-      };
-      card.setPointerCapture(e.pointerId);
-      card.classList.add("dragging");
-    });
-    card.addEventListener("pointermove", (e) => {
-      if (!drag || drag.card !== card) return;
-      const r = drag.rect;
-      let x = ((e.clientX - drag.dx - r.left) / r.width) * 100;
-      let y = ((e.clientY - drag.dy - r.top) / r.height) * 100;
-      // Keep a dropped card reachable: never let it leave the board.
-      x = Math.max(0, Math.min(x, 100 - (card.offsetWidth / r.width) * 100));
-      y = Math.max(0, Math.min(y, 100 - (card.offsetHeight / r.height) * 100));
-      card.style.left = x + "%";
-      card.style.top = y + "%";
-    });
-    const finish = async (e) => {
-      if (!drag || drag.card !== card) return;
-      card.classList.remove("dragging");
-      card.classList.add("placed");
-      try { card.releasePointerCapture(e.pointerId); } catch (err) {}
-      seating.positions[drag.key] = {
-        x: parseFloat(card.style.left) || 0,
-        y: parseFloat(card.style.top) || 0
-      };
-      drag = null;
-      const el = document.getElementById("seat-placed");
-      if (el) el.textContent = allGuestPeople().filter(pr => seating.positions[pr.key]).length;
-      await saveKey("wedding-seating", seating);
-    };
-    card.addEventListener("pointerup", finish);
-    card.addEventListener("pointercancel", finish);
   });
 
   document.getElementById("seat-reset").addEventListener("click", async () => {
@@ -2821,8 +2882,8 @@ function renderSeating() {
     if (!confirm(`Move every name back to the top of the board${nTables ? ` and remove ${nTables} table${nTables === 1 ? "" : "s"}` : ""}? The seating layout will be cleared.`)) return;
     seating.positions = {};
     seating.tables = [];
-    seatSelectedTable = null;
-    await saveKey("wedding-seating", seating);
+    seatSel.clear();
+    await save();
     renderSeating();
   });
 }
