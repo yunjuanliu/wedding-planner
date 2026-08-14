@@ -2112,6 +2112,40 @@ const GUEST_SUBTABS = [
   {id: "seating",  label: "Find your seat"},
 ];
 
+// Removing a guest has to clear their name-tag ticks and seat position too.
+// Those live in their own rows keyed by guest id, so without this they linger
+// forever, and a future guest could never reuse the id but the row still grows.
+async function forgetGuestKeys(keys) {
+  let touched = false;
+  keys.forEach(k => {
+    if (nameTags.done && nameTags.done[k]) { delete nameTags.done[k]; touched = true; }
+    if (seating.positions && seating.positions[k]) { delete seating.positions[k]; touched = true; }
+  });
+  if (!touched) return;
+  await saveKey("wedding-nametags", nameTags);
+  await saveKey("wedding-seating", seating);
+}
+// Every id a household occupies: its own, plus each person row under it.
+function householdKeys(g) {
+  return [g.id].concat((g.people || []).map(pr => pr.id));
+}
+
+// Clears ticks and seat positions belonging to guests who no longer exist -
+// the residue of deletions made before those were cleaned up at the source.
+// Guarded hard: if the guest list failed to load, every key would look like an
+// orphan and this would wipe the lot.
+async function pruneOrphanGuestData() {
+  if (!storeLoadedOk || !Array.isArray(guests) || guests.length === 0) return 0;
+  const live = new Set();
+  guests.forEach(g => householdKeys(g).forEach(k => live.add(k)));
+  const dead = [];
+  Object.keys(nameTags.done || {}).forEach(k => { if (!live.has(k)) dead.push(k); });
+  Object.keys(seating.positions || {}).forEach(k => { if (!live.has(k) && dead.indexOf(k) === -1) dead.push(k); });
+  if (dead.length === 0) return 0;
+  await forgetGuestKeys(dead);
+  return dead.length;
+}
+
 function firstNameOf(n) {
   const t = (n || "").trim();
   return t ? t.split(/\s+/)[0] : "";
@@ -2291,7 +2325,9 @@ function renderGuestsOverview() {
     list.innerHTML = visible.map(g => `
       <div class="guest-block">
       <div class="guest-row">
-        <span style="font-weight:600;">${esc(g.name)}</span>
+        <input type="text" data-household-name data-id="${g.id}" value="${esc(g.name)}"
+          placeholder="Household or guest name" autocomplete="off" data-lpignore="true" data-1p-ignore
+          style="font-weight:600; width:100%;" />
         <span class="muted" data-id="${g.id}" data-action="edit-partysize" style="cursor:pointer; border-bottom:1px dashed transparent;" title="Click to edit">${g.partySize}</span>
         <select data-id="${g.id}" data-field="transport">
           <option value="" ${!g.transport?"selected":""}>—</option>
@@ -2346,6 +2382,19 @@ function renderGuestsOverview() {
     renderGuests();
   });
 
+  // Saved in place rather than re-rendering, which would steal focus mid-edit.
+  list.querySelectorAll("[data-household-name]").forEach(inp => {
+    inp.addEventListener("change", async (e) => {
+      const g = guests.find(x => x.id === e.currentTarget.dataset.id);
+      if (!g) return;
+      const next = e.currentTarget.value.trim();
+      // An empty household name would leave a nameless row that the name-tag
+      // and seating tabs both skip, so the guest would silently vanish.
+      if (!next) { e.currentTarget.value = g.name; return; }
+      g.name = next;
+      await saveKey("wedding-guests", guests);
+    });
+  });
   list.querySelectorAll("[data-field]").forEach(el => {
     el.addEventListener("change", async (e) => {
       const g = guests.find(x => x.id === e.currentTarget.dataset.id);
@@ -2357,8 +2406,11 @@ function renderGuestsOverview() {
   });
   list.querySelectorAll("[data-action=remove]").forEach(btn => {
     btn.addEventListener("click", async (e) => {
-      guests = guests.filter(g => g.id !== e.currentTarget.dataset.id);
+      const id = e.currentTarget.dataset.id;
+      const gone = guests.find(g => g.id === id);
+      guests = guests.filter(g => g.id !== id);
       await saveKey("wedding-guests", guests);
+      if (gone) await forgetGuestKeys(householdKeys(gone));
       renderGuests();
     });
   });
@@ -2443,8 +2495,10 @@ function renderGuestsOverview() {
     btn.addEventListener("click", async (e) => {
       const g = guests.find(x => x.id === e.currentTarget.dataset.gid);
       if (!g) return;
-      g.people = g.people.filter(x => x.id !== e.currentTarget.dataset.pid);
+      const pid = e.currentTarget.dataset.pid;
+      g.people = g.people.filter(x => x.id !== pid);
       await saveKey("wedding-guests", guests);
+      await forgetGuestKeys([pid]);
       renderGuests();
     });
   });
@@ -4431,6 +4485,9 @@ function renderDashboard() {
   await syncLocalToRemote();
 
   // Last, so the day's copy reflects anything that just synced up.
+  // Before the snapshot, so the day's copy is not a record of the leftovers.
+  pruneOrphanGuestData();
+
   writeDailySnapshotIfNeeded();
 })();
 </script>
