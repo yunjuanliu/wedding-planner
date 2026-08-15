@@ -341,6 +341,18 @@
     position: absolute; top: -8px; left: 12px; padding: 0 6px;
     background: var(--white); color: var(--ink-soft); font-size: 10.5px; font-weight: 600;
   }
+  .tent-pole {
+    position: absolute; z-index: 0; pointer-events: none;
+    transform: translate(-50%, -50%);
+    border: 1px dashed #B3253C; border-radius: 50%;
+    background: rgba(217,69,95,0.07);
+  }
+  /* The pole itself, at the centre of the clearance it needs. */
+  .tent-pole > span {
+    position: absolute; top: 50%; left: 50%; width: 7px; height: 7px;
+    transform: translate(-50%, -50%); border-radius: 50%; background: #B3253C;
+  }
+  .seat-table.clash { outline: 2px solid #D9455F; outline-offset: 3px; }
   .tent-label {
     position: absolute; top: -9px; left: 10px; padding: 0 6px;
     background: var(--white); color: var(--primary);
@@ -2694,6 +2706,15 @@ const BOARD_FT = {w: 36, h: 63};          // h is recomputed per render
 const TENT_TOP_FT = 3;
 const STAGE_TOP_FT = TENT_TOP_FT + TENT_FT.h + 2;   // 2ft clear below the tent
 const STAGE_ROW_FT = 1.3;
+// Centre poles on the long axis at the third points, which is how a 30x45
+// pole tent is rigged: dead centre across the width, 15ft and 30ft down the
+// length, splitting it into three bays. POLE_CLEAR_FT is the footprint to
+// keep clear around each - the pole itself plus its base plate.
+const TENT_POLES_FT = [
+  {x: TENT_FT.w / 2, y: TENT_FT.h / 3},
+  {x: TENT_FT.w / 2, y: TENT_FT.h * 2 / 3},
+];
+const POLE_CLEAR_FT = 3;
 // The strip has to fit however many guests there are: at a fixed height the
 // last rows were clipped by the board's overflow and those names became
 // unreachable. Recomputed each render, and the board's aspect ratio is set
@@ -2797,6 +2818,7 @@ function renderSeating() {
     <span class="muted" style="font-size:13px;">
       <strong id="seat-placed">${placed}</strong> of ${people.length} placed &middot; drag a name anywhere on the board
       <span id="seat-selinfo" style="color:var(--primary); font-weight:600; margin-left:6px;"></span>
+      <span id="seat-poleclash" style="display:none; color:#B3253C; font-weight:600; margin-left:8px;"></span>
     </span>
     <div class="row" style="gap:8px;">
       <select id="seat-table-type" style="min-width:150px;">
@@ -2814,6 +2836,10 @@ function renderSeating() {
         width:${(TENT_FT.w / BOARD_FT.w * 100).toFixed(3)}%;
         height:${(TENT_FT.h / BOARD_FT.h * 100).toFixed(3)}%;">
         <span class="tent-label">${TENT_FT.w}' &times; ${TENT_FT.h}' tent</span>
+        ${TENT_POLES_FT.map((pole, i) => `<div class="tent-pole" data-pole="${i}" title="Tent pole - keep clear"
+          style="left:${(pole.x / TENT_FT.w * 100).toFixed(3)}%; top:${(pole.y / TENT_FT.h * 100).toFixed(3)}%;
+                 width:${(POLE_CLEAR_FT / TENT_FT.w * 100).toFixed(3)}%;
+                 height:${(POLE_CLEAR_FT / TENT_FT.h * 100).toFixed(3)}%;"><span></span></div>`).join("")}
       </div>
       <div class="stage-divider" style="top:${((STAGE_TOP_FT - 1) / BOARD_FT.h * 100).toFixed(3)}%;">
         <span>Not seated yet - drag into the tent</span>
@@ -2847,6 +2873,27 @@ function renderSeating() {
 
   const board = document.getElementById("seat-board");
   const save = () => saveKey("wedding-seating", seating);
+
+  // A table over a pole is the one mistake this plan exists to prevent, so it
+  // is called out rather than left to the eye. Measured from the rendered
+  // boxes, which already account for rotation.
+  function flagPoleClashes() {
+    const poles = [...board.querySelectorAll(".tent-pole")].map(p => p.getBoundingClientRect());
+    let clashes = 0;
+    board.querySelectorAll(".seat-table").forEach(el => {
+      const r = el.getBoundingClientRect();
+      const hit = poles.some(p => r.left < p.right && r.right > p.left && r.top < p.bottom && r.bottom > p.top);
+      el.classList.toggle("clash", hit);
+      if (hit) clashes++;
+    });
+    const warn = document.getElementById("seat-poleclash");
+    if (warn) {
+      warn.textContent = clashes ? `${clashes} table${clashes === 1 ? "" : "s"} sitting on a tent pole` : "";
+      warn.style.display = clashes ? "" : "none";
+    }
+    return clashes;
+  }
+  flagPoleClashes();
   const selId = (kind, id) => kind + ":" + id;
   const elFor = (sid) => {
     const [kind, id] = [sid.slice(0, 1), sid.slice(2)];
@@ -2996,6 +3043,7 @@ function renderSeating() {
       });
       const el = document.getElementById("seat-placed");
       if (el) el.textContent = allGuestPeople().filter(pr => seating.positions[pr.key]).length;
+      flagPoleClashes();
       await save();
     } else if (finished === "marquee") {
       const mr = marquee.getBoundingClientRect();
@@ -3012,6 +3060,7 @@ function renderSeating() {
       paintSelection();
     } else {
       if (moved && start && start.pre) seatPushUndo(start.pre);
+      flagPoleClashes();
       await save();
     }
   };
