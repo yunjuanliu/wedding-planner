@@ -318,8 +318,7 @@
   /* Chairs respond only on the selected table, so a click on the plan at rest
      never silently changes the seat count. */
   .seat-table.selected svg { pointer-events: auto; }
-  .seat-table.selected [data-chair] { cursor: pointer; }
-  .seat-table.selected [data-chair]:hover { stroke: var(--primary); stroke-width: 3; }
+  .seat-table.selected .chair-badge:hover circle { stroke: var(--ink); }
   .seat-table-label {
     position: absolute; top: 50%; left: 50%;
     font-size: 11px; font-weight: 700; color: var(--ink);
@@ -2728,60 +2727,125 @@ function boardHeightFt(peopleCount) {
 // table is 2.5ft deep and a chair needs about 1.5ft, so an 8ft rectangle
 // occupies 8 x 5.5ft of floor.
 const TABLE_TYPES = [
-  {id: "rect8",   label: "8' rectangle - 8 seats",  ftW: 8, ftH: 5.5, tableW: 8, tableD: 2.5, seatsPerSide: 4},
-  {id: "rect6",   label: "6' rectangle - 6 seats",  ftW: 6, ftH: 5.5, tableW: 6, tableD: 2.5, seatsPerSide: 3},
-  {id: "rect4",   label: "4' rectangle - 4 seats",  ftW: 4, ftH: 5.5, tableW: 4, tableD: 2.5, seatsPerSide: 2},
-  {id: "round60", label: '60" round - 8 seats',     ftW: 8, ftH: 8,   round: true, dia: 5, seats: 8},
-  {id: "round48", label: '48" round - 6 seats',     ftW: 7, ftH: 7,   round: true, dia: 4, seats: 6},
-  {id: "head8",   label: "8' head table - 4 seats", ftW: 8, ftH: 4,   tableW: 8, tableD: 2.5, seatsPerSide: 4, oneSided: true},
+  {id: "rect8",   label: "8' rectangle - up to 10 seats", ftH: 5.5, tableW: 8, tableD: 2.5, seatsPerSide: 4, ends: true},
+  {id: "rect6",   label: "6' rectangle - up to 8 seats",  ftH: 5.5, tableW: 6, tableD: 2.5, seatsPerSide: 3, ends: true},
+  {id: "rect4",   label: "4' rectangle - up to 6 seats",  ftH: 5.5, tableW: 4, tableD: 2.5, seatsPerSide: 2, ends: true},
+  {id: "round60", label: '60" round - 8 seats',           ftW: 8, ftH: 8, round: true, dia: 5, seats: 8},
+  {id: "round48", label: '48" round - 6 seats',           ftW: 7, ftH: 7, round: true, dia: 4, seats: 6},
+  {id: "head8",   label: "8' head table - 4 seats",       ftW: 8, ftH: 4, tableW: 8, tableD: 2.5, seatsPerSide: 4, oneSided: true},
 ];
+const CHAIR_FT = 1.5;
+// Chair indices: along the top edge, then the bottom, then the two ends.
+// Stable, so a removal survives re-renders.
+function endIndices(type) {
+  if (!type.ends) return [];
+  const n = type.seatsPerSide;
+  return [n * 2, n * 2 + 1];
+}
+// End seats start off: an 8ft table normally seats 8, and turning them on is
+// what takes it to 10. Tables saved before end seats existed get the same
+// treatment, so an existing plan does not silently gain seats and grow.
+function normalizeTableChairs(t) {
+  if (!Array.isArray(t.noChairs)) t.noChairs = endIndices(tableTypeById(t.type)).slice();
+  return t;
+}
+// Footprint in feet, which changes with the end seats: an 8ft table is 8ft of
+// floor, or 11ft once someone is sitting at each end.
+function tableFootprintFt(t) {
+  const type = tableTypeById(t.type);
+  if (type.round) return {w: type.ftW, h: type.ftH};
+  const rem = t.noChairs || [];
+  const [li, ri] = endIndices(type);
+  const left  = type.ends && rem.indexOf(li) === -1 ? CHAIR_FT : 0;
+  const right = type.ends && rem.indexOf(ri) === -1 ? CHAIR_FT : 0;
+  return {w: type.tableW + left + right, h: type.ftH, left: left, right: right};
+}
 // Percentage of board width, which is what the element is sized in.
-function tableWidthPct(type) { return (type.ftW / BOARD_FT.w) * 100; }
+function tableWidthPct(t) { return (tableFootprintFt(t).w / BOARD_FT.w) * 100; }
 function tableTypeById(id) { return TABLE_TYPES.find(t => t.id === id) || TABLE_TYPES[0]; }
 
-// removed: array of chair indices that have been clicked off. Chairs keep a
-// stable index so a removal survives re-renders: rectangles run along the top
-// edge first then the bottom, round tables run clockwise from twelve o'clock.
-function tableSvg(type, removed) {
-  removed = removed || [];
-  const U = 10;
-  const W = type.ftW * U, H = type.ftH * U;
+// focused = this table is selected. In focus mode every seat carries a badge:
+// a cross to take it away, a plus where one has been taken away to put it
+// back. Out of focus a removed seat is simply not drawn, so the plan reads as
+// the room will actually be laid out.
+function tableSvg(t, focused) {
+  const type = tableTypeById(t.type);
+  const rem = t.noChairs || [];
+  const U = 10, C = CHAIR_FT * U;
   const S = "stroke='#3A3A3A' fill='#FFFFFF' stroke-width='2' vector-effect='non-scaling-stroke'";
-  const GHOST = "stroke='#C9C4DA' fill='none' stroke-width='1.5' stroke-dasharray='3 3' vector-effect='non-scaling-stroke'";
-  const chairW = 1.5 * U, chairD = 1.5 * U, r = 3;
-  const chairAttrs = (i) => `class="tbl-chair${removed.indexOf(i) !== -1 ? " off" : ""}" data-chair="${i}"`;
+  const r = 3;
+  const gone = i => rem.indexOf(i) !== -1;
+
+  // A seat, plus its badge when the table has focus.
+  const parts = [];
+  const seat = (i, shape) => {
+    if (gone(i) && !focused) return;
+    const off = gone(i);
+    const style = off ? "stroke='#C9C4DA' fill='none' stroke-width='1.5' stroke-dasharray='3 3' vector-effect='non-scaling-stroke'" : S;
+    parts.push(shape(style));
+    if (!focused) return;
+    const [bx, by] = shape.centre;
+    const R = 4.6;
+    parts.push(`<g class="chair-badge" data-chair="${i}" style="cursor:pointer;">` +
+      `<circle cx="${bx.toFixed(1)}" cy="${by.toFixed(1)}" r="${R}" fill="${off ? "#2E9E6B" : "#D9455F"}" stroke="#FFFFFF" stroke-width="1.4" vector-effect="non-scaling-stroke"/>` +
+      (off
+        ? `<path d="M${(bx-2.3).toFixed(1)} ${by.toFixed(1)}h4.6M${bx.toFixed(1)} ${(by-2.3).toFixed(1)}v4.6" stroke="#FFFFFF" stroke-width="1.6" stroke-linecap="round" vector-effect="non-scaling-stroke"/>`
+        : `<path d="M${(bx-1.9).toFixed(1)} ${(by-1.9).toFixed(1)}l3.8 3.8M${(bx+1.9).toFixed(1)} ${(by-1.9).toFixed(1)}l-3.8 3.8" stroke="#FFFFFF" stroke-width="1.6" stroke-linecap="round" vector-effect="non-scaling-stroke"/>`) +
+      `</g>`);
+  };
 
   if (type.round) {
+    const W = type.ftW * U, H = type.ftH * U;
     const R = (type.dia / 2) * U, cx = W / 2, cy = H / 2;
-    let chairs = "";
     for (let i = 0; i < type.seats; i++) {
       const a = (i / type.seats) * Math.PI * 2 - Math.PI / 2;
-      const cr = R + chairD * 0.62;
-      chairs += `<circle ${chairAttrs(i)} cx="${(cx + Math.cos(a) * cr).toFixed(1)}" cy="${(cy + Math.sin(a) * cr).toFixed(1)}" r="${(chairW / 2).toFixed(1)}" ${removed.indexOf(i) !== -1 ? GHOST : S}/>`;
+      const cr = R + C * 0.62;
+      const x = cx + Math.cos(a) * cr, y = cy + Math.sin(a) * cr;
+      const sh = (style) => `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(C/2).toFixed(1)}" ${style}/>`;
+      sh.centre = [x, y];
+      seat(i, sh);
     }
-    return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">${chairs}` +
+    return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">${parts.join("")}` +
            `<circle cx="${cx}" cy="${cy}" r="${R}" ${S}/></svg>`;
   }
 
+  const fp = tableFootprintFt(t);
+  const W = fp.w * U, H = type.ftH * U;
   const bodyW = type.tableW * U, bodyD = type.tableD * U;
-  const bx = (W - bodyW) / 2, by = (H - bodyD) / 2;
+  const bx = (fp.left || 0) * U, by = (H - bodyD) / 2;
   const n = type.seatsPerSide;
-  let chairs = "";
+
   for (let i = 0; i < n; i++) {
-    const x = bx + (bodyW / n) * i + (bodyW / n - chairW) / 2;
-    chairs += `<rect ${chairAttrs(i)} x="${x.toFixed(1)}" y="${(by - chairD).toFixed(1)}" width="${chairW}" height="${chairD}" rx="${r}" ${removed.indexOf(i) !== -1 ? GHOST : S}/>`;
+    const x = bx + (bodyW / n) * i + (bodyW / n - C) / 2;
+    const top = (style) => `<rect x="${x.toFixed(1)}" y="${(by - C).toFixed(1)}" width="${C}" height="${C}" rx="${r}" ${style}/>`;
+    top.centre = [x + C/2, by - C/2];
+    seat(i, top);
     if (!type.oneSided) {
-      const j = n + i;
-      chairs += `<rect ${chairAttrs(j)} x="${x.toFixed(1)}" y="${(by + bodyD).toFixed(1)}" width="${chairW}" height="${chairD}" rx="${r}" ${removed.indexOf(j) !== -1 ? GHOST : S}/>`;
+      const bot = (style) => `<rect x="${x.toFixed(1)}" y="${(by + bodyD).toFixed(1)}" width="${C}" height="${C}" rx="${r}" ${style}/>`;
+      bot.centre = [x + C/2, by + bodyD + C/2];
+      seat(n + i, bot);
     }
   }
-  return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">${chairs}` +
+  if (type.ends) {
+    const [li, ri] = endIndices(type);
+    const ey = by + (bodyD - C) / 2;
+    const lx = bx - C;
+    const left = (style) => `<rect x="${lx.toFixed(1)}" y="${ey.toFixed(1)}" width="${C}" height="${C}" rx="${r}" ${style}/>`;
+    left.centre = [lx + C/2, ey + C/2];
+    seat(li, left);
+    const rx2 = bx + bodyW;
+    const right = (style) => `<rect x="${rx2.toFixed(1)}" y="${ey.toFixed(1)}" width="${C}" height="${C}" rx="${r}" ${style}/>`;
+    right.centre = [rx2 + C/2, ey + C/2];
+    seat(ri, right);
+  }
+  return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">${parts.join("")}` +
          `<rect x="${bx}" y="${by}" width="${bodyW}" height="${bodyD}" rx="${r}" ${S}/></svg>`;
 }
 // Chairs actually available at a table, after any have been clicked off.
 function tableSeatCount(t) {
   const type = tableTypeById(t.type);
-  const total = type.round ? type.seats : type.seatsPerSide * (type.oneSided ? 1 : 2);
+  const total = type.round ? type.seats
+              : type.seatsPerSide * (type.oneSided ? 1 : 2) + endIndices(type).length;
   return total - ((t.noChairs || []).length);
 }
 
@@ -2809,6 +2873,7 @@ function renderSeating() {
   if (!seating || typeof seating !== "object") seating = {positions: {}, tables: []};
   if (!seating.positions) seating.positions = {};
   if (!Array.isArray(seating.tables)) seating.tables = [];
+  seating.tables.forEach(normalizeTableChairs);
   const people = allGuestPeople();
   BOARD_FT.h = boardHeightFt(people.length);
   const placed = people.filter(pr => seating.positions[pr.key]).length;
@@ -2845,10 +2910,12 @@ function renderSeating() {
         <span>Not seated yet - drag into the tent</span>
       </div>
       ${(seating.tables || []).map(t => {
+        normalizeTableChairs(t);
         const type = tableTypeById(t.type);
+        const focused = seatSel.size === 1 && seatSel.has("t:" + t.id);
         return `<div class="seat-table${seatSel.size === 1 && seatSel.has("t:" + t.id) ? " selected" : ""}${seatSel.has("t:" + t.id) ? " sel" : ""}" data-table-id="${t.id}"
-          style="left:${t.x}%; top:${t.y}%; width:${tableWidthPct(type).toFixed(3)}%; transform:translate(-50%,-50%) rotate(${t.rot || 0}deg);">
-          ${tableSvg(type, t.noChairs)}
+          style="left:${t.x}%; top:${t.y}%; width:${tableWidthPct(t).toFixed(3)}%; transform:translate(-50%,-50%) rotate(${t.rot || 0}deg);">
+          ${tableSvg(t, focused)}
           ${t.label ? `<span class="seat-table-label" style="transform:translate(-50%,-50%) rotate(${-(t.rot || 0)}deg);">${esc(t.label)}</span>` : ""}
           <span class="seat-table-handle rotate" data-handle="rotate" title="Drag to rotate"></span>
           <button class="seat-table-name" data-table-label="${t.id}" title="Name this table" aria-label="Name this table">&#9998;</button>
@@ -2864,7 +2931,7 @@ function renderSeating() {
   </div>
   <p class="muted" style="font-size:12px; margin-top:8px;">
     Drag a name onto the board to seat it. Drag across empty board to select several at once, or shift-click to add and remove
-    individual ones, then drag any of them to move the whole group. Select a table to rotate it, click a chair to remove or restore it, or use ✎ to name it. Tables are drawn to scale and cannot be resized.
+    individual ones, then drag any of them to move the whole group. Select a table to rotate it and to show its seat controls - a red cross takes a seat away, a green plus puts one back, including the two end seats. Use ✎ to name it. Tables are drawn to scale and cannot be resized.
     <strong>${navigator.platform.indexOf("Mac") === 0 ? "⌘Z" : "Ctrl+Z"}</strong> undoes the last change on this board
     (<strong>${navigator.platform.indexOf("Mac") === 0 ? "⇧⌘Z" : "Ctrl+Y"}</strong> redoes).
     With tables selected: <strong>${navigator.platform.indexOf("Mac") === 0 ? "⌘C / ⌘V" : "Ctrl+C / Ctrl+V"}</strong> to copy and paste,
@@ -2928,7 +2995,7 @@ function renderSeating() {
     if (e.target.closest("[data-table-del]") || e.target.closest("[data-table-label]")) return;
     // Chairs are only interactive on the selected table, and a click on one
     // toggles it rather than starting a drag.
-    if (e.target.closest("[data-chair]") && e.target.closest(".seat-table.selected")) return;
+    if (e.target.closest(".chair-badge")) return;
     const handle = e.target.closest("[data-handle]");
     const item = e.target.closest(".seat-card, .seat-table");
     const r = board.getBoundingClientRect();
@@ -3067,7 +3134,7 @@ function renderSeating() {
   board.addEventListener("pointerup", endDrag);
   board.addEventListener("pointercancel", endDrag);
 
-  board.querySelectorAll(".seat-table.selected [data-chair]").forEach(ch => {
+  board.querySelectorAll(".seat-table.selected .chair-badge").forEach(ch => {
     ch.addEventListener("click", async (e) => {
       e.stopPropagation();
       const el = e.currentTarget.closest(".seat-table");
