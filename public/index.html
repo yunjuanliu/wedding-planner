@@ -308,6 +308,24 @@
     font-size: 10px; line-height: 1; cursor: pointer;
   }
   .seat-table-del:hover { background: #B3253C; }
+  .seat-table-name {
+    position: absolute; top: -22px; right: 14px; width: 18px; height: 18px; min-height: 0;
+    padding: 0; border-radius: 50%; border: none; background: var(--primary); color: #fff;
+    font-size: 10px; line-height: 1; cursor: pointer; display: none;
+  }
+  .seat-table.selected .seat-table-name { display: block; }
+  .seat-table-name:hover { background: var(--primary-hover); }
+  /* Chairs respond only on the selected table, so a click on the plan at rest
+     never silently changes the seat count. */
+  .seat-table.selected svg { pointer-events: auto; }
+  .seat-table.selected [data-chair] { cursor: pointer; }
+  .seat-table.selected [data-chair]:hover { stroke: var(--primary); stroke-width: 3; }
+  .seat-table-label {
+    position: absolute; top: 50%; left: 50%;
+    font-size: 11px; font-weight: 700; color: var(--ink);
+    white-space: nowrap; pointer-events: none; max-width: 96%;
+    overflow: hidden; text-overflow: ellipsis;
+  }
   /* The tent: a fixed outline the plan is arranged inside, not a draggable
      object. Sits under everything and ignores pointers entirely. */
   .tent-outline {
@@ -2700,11 +2718,17 @@ const TABLE_TYPES = [
 function tableWidthPct(type) { return (type.ftW / BOARD_FT.w) * 100; }
 function tableTypeById(id) { return TABLE_TYPES.find(t => t.id === id) || TABLE_TYPES[0]; }
 
-function tableSvg(type) {
-  const U = 10;                                   // svg units per foot
+// removed: array of chair indices that have been clicked off. Chairs keep a
+// stable index so a removal survives re-renders: rectangles run along the top
+// edge first then the bottom, round tables run clockwise from twelve o'clock.
+function tableSvg(type, removed) {
+  removed = removed || [];
+  const U = 10;
   const W = type.ftW * U, H = type.ftH * U;
   const S = "stroke='#3A3A3A' fill='#FFFFFF' stroke-width='2' vector-effect='non-scaling-stroke'";
+  const GHOST = "stroke='#C9C4DA' fill='none' stroke-width='1.5' stroke-dasharray='3 3' vector-effect='non-scaling-stroke'";
   const chairW = 1.5 * U, chairD = 1.5 * U, r = 3;
+  const chairAttrs = (i) => `class="tbl-chair${removed.indexOf(i) !== -1 ? " off" : ""}" data-chair="${i}"`;
 
   if (type.round) {
     const R = (type.dia / 2) * U, cx = W / 2, cy = H / 2;
@@ -2712,7 +2736,7 @@ function tableSvg(type) {
     for (let i = 0; i < type.seats; i++) {
       const a = (i / type.seats) * Math.PI * 2 - Math.PI / 2;
       const cr = R + chairD * 0.62;
-      chairs += `<circle cx="${(cx + Math.cos(a) * cr).toFixed(1)}" cy="${(cy + Math.sin(a) * cr).toFixed(1)}" r="${(chairW / 2).toFixed(1)}" ${S}/>`;
+      chairs += `<circle ${chairAttrs(i)} cx="${(cx + Math.cos(a) * cr).toFixed(1)}" cy="${(cy + Math.sin(a) * cr).toFixed(1)}" r="${(chairW / 2).toFixed(1)}" ${removed.indexOf(i) !== -1 ? GHOST : S}/>`;
     }
     return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">${chairs}` +
            `<circle cx="${cx}" cy="${cy}" r="${R}" ${S}/></svg>`;
@@ -2724,13 +2748,20 @@ function tableSvg(type) {
   let chairs = "";
   for (let i = 0; i < n; i++) {
     const x = bx + (bodyW / n) * i + (bodyW / n - chairW) / 2;
-    chairs += `<rect x="${x.toFixed(1)}" y="${(by - chairD).toFixed(1)}" width="${chairW}" height="${chairD}" rx="${r}" ${S}/>`;
+    chairs += `<rect ${chairAttrs(i)} x="${x.toFixed(1)}" y="${(by - chairD).toFixed(1)}" width="${chairW}" height="${chairD}" rx="${r}" ${removed.indexOf(i) !== -1 ? GHOST : S}/>`;
     if (!type.oneSided) {
-      chairs += `<rect x="${x.toFixed(1)}" y="${(by + bodyD).toFixed(1)}" width="${chairW}" height="${chairD}" rx="${r}" ${S}/>`;
+      const j = n + i;
+      chairs += `<rect ${chairAttrs(j)} x="${x.toFixed(1)}" y="${(by + bodyD).toFixed(1)}" width="${chairW}" height="${chairD}" rx="${r}" ${removed.indexOf(j) !== -1 ? GHOST : S}/>`;
     }
   }
   return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">${chairs}` +
          `<rect x="${bx}" y="${by}" width="${bodyW}" height="${bodyD}" rx="${r}" ${S}/></svg>`;
+}
+// Chairs actually available at a table, after any have been clicked off.
+function tableSeatCount(t) {
+  const type = tableTypeById(t.type);
+  const total = type.round ? type.seats : type.seatsPerSide * (type.oneSided ? 1 : 2);
+  return total - ((t.noChairs || []).length);
 }
 
 // Positions are percentages of the board, not pixels, so a layout arranged on
@@ -2791,8 +2822,10 @@ function renderSeating() {
         const type = tableTypeById(t.type);
         return `<div class="seat-table${seatSel.size === 1 && seatSel.has("t:" + t.id) ? " selected" : ""}${seatSel.has("t:" + t.id) ? " sel" : ""}" data-table-id="${t.id}"
           style="left:${t.x}%; top:${t.y}%; width:${tableWidthPct(type).toFixed(3)}%; transform:translate(-50%,-50%) rotate(${t.rot || 0}deg);">
-          ${tableSvg(type)}
+          ${tableSvg(type, t.noChairs)}
+          ${t.label ? `<span class="seat-table-label" style="transform:translate(-50%,-50%) rotate(${-(t.rot || 0)}deg);">${esc(t.label)}</span>` : ""}
           <span class="seat-table-handle rotate" data-handle="rotate" title="Drag to rotate"></span>
+          <button class="seat-table-name" data-table-label="${t.id}" title="Name this table" aria-label="Name this table">&#9998;</button>
           <button class="seat-table-del" data-table-del="${t.id}" title="Remove table" aria-label="Remove table">&#10005;</button>
         </div>`;
       }).join("")}
@@ -2805,7 +2838,7 @@ function renderSeating() {
   </div>
   <p class="muted" style="font-size:12px; margin-top:8px;">
     Drag a name onto the board to seat it. Drag across empty board to select several at once, or shift-click to add and remove
-    individual ones, then drag any of them to move the whole group. Select a single table to rotate it; tables are drawn to scale and cannot be resized.
+    individual ones, then drag any of them to move the whole group. Select a table to rotate it, click a chair to remove or restore it, or use ✎ to name it. Tables are drawn to scale and cannot be resized.
     <strong>${navigator.platform.indexOf("Mac") === 0 ? "⌘Z" : "Ctrl+Z"}</strong> undoes the last change on this board
     (<strong>${navigator.platform.indexOf("Mac") === 0 ? "⇧⌘Z" : "Ctrl+Y"}</strong> redoes).
     With tables selected: <strong>${navigator.platform.indexOf("Mac") === 0 ? "⌘C / ⌘V" : "Ctrl+C / Ctrl+V"}</strong> to copy and paste,
@@ -2845,7 +2878,10 @@ function renderSeating() {
   };
 
   board.addEventListener("pointerdown", (e) => {
-    if (e.target.closest("[data-table-del]")) return;
+    if (e.target.closest("[data-table-del]") || e.target.closest("[data-table-label]")) return;
+    // Chairs are only interactive on the selected table, and a click on one
+    // toggles it rather than starting a drag.
+    if (e.target.closest("[data-chair]") && e.target.closest(".seat-table.selected")) return;
     const handle = e.target.closest("[data-handle]");
     const item = e.target.closest(".seat-card, .seat-table");
     const r = board.getBoundingClientRect();
@@ -2982,6 +3018,36 @@ function renderSeating() {
   board.addEventListener("pointerup", endDrag);
   board.addEventListener("pointercancel", endDrag);
 
+  board.querySelectorAll(".seat-table.selected [data-chair]").forEach(ch => {
+    ch.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const el = e.currentTarget.closest(".seat-table");
+      const t = seating.tables.find(x => x.id === el.dataset.tableId);
+      if (!t) return;
+      const i = Number(e.currentTarget.dataset.chair);
+      seatPushUndo();
+      t.noChairs = t.noChairs || [];
+      const at = t.noChairs.indexOf(i);
+      if (at === -1) t.noChairs.push(i); else t.noChairs.splice(at, 1);
+      await save();
+      renderSeating();
+      seatFlash(`${tableSeatCount(t)} seat${tableSeatCount(t) === 1 ? "" : "s"} at this table`);
+    });
+  });
+  board.querySelectorAll("[data-table-label]").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const t = seating.tables.find(x => x.id === e.currentTarget.dataset.tableLabel);
+      if (!t) return;
+      openInputModal("Table name", t.label || "", async (raw) => {
+        seatPushUndo();
+        const v = raw.trim();
+        if (v) t.label = v; else delete t.label;
+        await save();
+        renderSeating();
+      });
+    });
+  });
   board.querySelectorAll("[data-table-del]").forEach(btn => {
     btn.addEventListener("click", async (e) => {
       e.stopPropagation();
@@ -3094,7 +3160,9 @@ document.addEventListener("keydown", async (e) => {
     const ids = selectedTables();
     if (!ids.length) return;
     e.preventDefault();
-    seatClipboard = seating.tables.filter(t => ids.indexOf(t.id) !== -1).map(t => ({...t}));
+    // Deep copy: a table carries a noChairs array, and a spread would leave
+    // the copy sharing it - editing one table's chairs would change the other.
+    seatClipboard = seating.tables.filter(t => ids.indexOf(t.id) !== -1).map(t => JSON.parse(JSON.stringify(t)));
     seatFlash(`${seatClipboard.length} table${seatClipboard.length === 1 ? "" : "s"} copied`);
     return;
   }
@@ -3104,15 +3172,15 @@ document.addEventListener("keydown", async (e) => {
     seatPushUndo();
     // Offset the copies so they do not land exactly on the originals and look
     // like nothing happened.
-    const made = seatClipboard.map(t => ({
-      ...t, id: uid(),
+    const made = seatClipboard.map(t => Object.assign(JSON.parse(JSON.stringify(t)), {
+      id: uid(),
       x: Math.max(0, Math.min(100, t.x + 4)),
       y: Math.max(0, Math.min(100, t.y + 4))
     }));
     seating.tables = (seating.tables || []).concat(made);
     seatSel = new Set(made.map(t => "t:" + t.id));
     // Paste again and the next copies step further out rather than restacking.
-    seatClipboard = made.map(t => ({...t}));
+    seatClipboard = made.map(t => JSON.parse(JSON.stringify(t)));
     await saveKey("wedding-seating", seating);
     renderSeating();
     seatFlash(`${made.length} table${made.length === 1 ? "" : "s"} pasted`);
