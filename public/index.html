@@ -272,12 +272,10 @@
        86 names need the room, and the extra width is what makes a table plan
        legible. Still portrait, so it matches a printed seating sign. */
     width: 100%; min-width: 320px; margin: 0 auto;
-    aspect-ratio: 3 / 4;
     background: var(--white);
     border: 1px solid var(--border); border-radius: 12px;
     background-image: linear-gradient(var(--border) 1px, transparent 1px),
                       linear-gradient(90deg, var(--border) 1px, transparent 1px);
-    background-size: 5% 3.3333%;
     overflow: hidden;
     touch-action: none;   /* let a drag pan the card, not the page */
   }
@@ -304,13 +302,32 @@
     border: 2px solid var(--white); box-shadow: 0 1px 3px rgba(29,27,41,0.3);
   }
   .seat-table-handle.rotate { border-radius: 50%; top: -22px; left: 50%; transform: translateX(-50%); cursor: grab; }
-  .seat-table-handle.scale  { border-radius: 3px; right: -10px; bottom: -10px; cursor: nwse-resize; }
   .seat-table-del {
     position: absolute; top: -22px; right: -10px; width: 18px; height: 18px; min-height: 0;
     padding: 0; border-radius: 50%; border: none; background: #D9455F; color: #fff;
     font-size: 10px; line-height: 1; cursor: pointer;
   }
   .seat-table-del:hover { background: #B3253C; }
+  /* The tent: a fixed outline the plan is arranged inside, not a draggable
+     object. Sits under everything and ignores pointers entirely. */
+  .tent-outline {
+    position: absolute; z-index: 0; pointer-events: none;
+    border: 2px solid var(--primary); border-radius: 4px;
+    background: rgba(110,76,217,0.035);
+  }
+  .stage-divider {
+    position: absolute; left: 0; right: 0; z-index: 0; pointer-events: none;
+    border-top: 1px dashed var(--border);
+  }
+  .stage-divider span {
+    position: absolute; top: -8px; left: 12px; padding: 0 6px;
+    background: var(--white); color: var(--ink-soft); font-size: 10.5px; font-weight: 600;
+  }
+  .tent-label {
+    position: absolute; top: -9px; left: 10px; padding: 0 6px;
+    background: var(--white); color: var(--primary);
+    font-size: 11px; font-weight: 700; letter-spacing: 0.3px;
+  }
   /* Group selection */
   .seat-card.sel { outline: 2px solid var(--primary); outline-offset: 1px; background: var(--primary); color: var(--white); }
   .seat-table.sel { outline: 1.5px dashed var(--primary); outline-offset: 4px; }
@@ -2646,53 +2663,85 @@ function renderNameTagCounts() {
 // ---------- Guest sub-tab: find your seat ----------
 // Drawn as SVG so a table stays sharp at any scale. Width is a percentage of
 // the board and the height follows the viewBox, so one number scales a table.
+// The board is a scale drawing, not an arbitrary canvas. One board width is
+// BOARD_FT.w feet, and because the board's aspect ratio matches those feet
+// exactly, a foot is the same number of pixels horizontally and vertically -
+// so a table sized as a percentage of board width comes out true to scale in
+// both axes with no further maths.
+const TENT_FT  = {w: 30, h: 45};          // the tent itself
+// The board is the tent plus a 3ft margin, then a staging strip underneath.
+// Unplaced names used to stack over the tent and hide the very plan they are
+// being arranged into; they now wait below it until dragged in.
+const BOARD_FT = {w: 36, h: 63};          // h is recomputed per render
+const TENT_TOP_FT = 3;
+const STAGE_TOP_FT = TENT_TOP_FT + TENT_FT.h + 2;   // 2ft clear below the tent
+const STAGE_ROW_FT = 1.3;
+// The strip has to fit however many guests there are: at a fixed height the
+// last rows were clipped by the board's overflow and those names became
+// unreachable. Recomputed each render, and the board's aspect ratio is set
+// from it so a foot stays square whatever the height works out to be.
+function boardHeightFt(peopleCount) {
+  const rows = Math.ceil(Math.max(peopleCount, 1) / SEAT_TRAY_COLS);
+  return Math.round((STAGE_TOP_FT + rows * STAGE_ROW_FT + 2) * 10) / 10;
+}
+
+// Real footprints in feet, table plus the chairs pulled up to it. A banquet
+// table is 2.5ft deep and a chair needs about 1.5ft, so an 8ft rectangle
+// occupies 8 x 5.5ft of floor.
 const TABLE_TYPES = [
-  {id: "rect8",  label: "Rectangle - 8 seats", w: 30, seatsPerSide: 4},
-  {id: "rect6",  label: "Rectangle - 6 seats", w: 25, seatsPerSide: 3},
-  {id: "rect4",  label: "Rectangle - 4 seats", w: 20, seatsPerSide: 2},
-  {id: "round8", label: "Round - 8 seats",     w: 24, round: true, seats: 8},
-  {id: "round6", label: "Round - 6 seats",     w: 21, round: true, seats: 6},
-  {id: "head",   label: "Head table",          w: 34, seatsPerSide: 0, headSeats: 5},
+  {id: "rect8",   label: "8' rectangle - 8 seats",  ftW: 8, ftH: 5.5, tableW: 8, tableD: 2.5, seatsPerSide: 4},
+  {id: "rect6",   label: "6' rectangle - 6 seats",  ftW: 6, ftH: 5.5, tableW: 6, tableD: 2.5, seatsPerSide: 3},
+  {id: "rect4",   label: "4' rectangle - 4 seats",  ftW: 4, ftH: 5.5, tableW: 4, tableD: 2.5, seatsPerSide: 2},
+  {id: "round60", label: '60" round - 8 seats',     ftW: 8, ftH: 8,   round: true, dia: 5, seats: 8},
+  {id: "round48", label: '48" round - 6 seats',     ftW: 7, ftH: 7,   round: true, dia: 4, seats: 6},
+  {id: "head8",   label: "8' head table - 4 seats", ftW: 8, ftH: 4,   tableW: 8, tableD: 2.5, seatsPerSide: 4, oneSided: true},
 ];
+// Percentage of board width, which is what the element is sized in.
+function tableWidthPct(type) { return (type.ftW / BOARD_FT.w) * 100; }
 function tableTypeById(id) { return TABLE_TYPES.find(t => t.id === id) || TABLE_TYPES[0]; }
 
 function tableSvg(type) {
-  const S = "stroke='#3A3A3A' fill='#FFFFFF' stroke-width='3' vector-effect='non-scaling-stroke'";
+  const U = 10;                                   // svg units per foot
+  const W = type.ftW * U, H = type.ftH * U;
+  const S = "stroke='#3A3A3A' fill='#FFFFFF' stroke-width='2' vector-effect='non-scaling-stroke'";
+  const chairW = 1.5 * U, chairD = 1.5 * U, r = 3;
+
   if (type.round) {
-    const n = type.seats, R = 66, cx = 100, cy = 100, chairR = 15;
+    const R = (type.dia / 2) * U, cx = W / 2, cy = H / 2;
     let chairs = "";
-    for (let i = 0; i < n; i++) {
-      const a = (i / n) * Math.PI * 2 - Math.PI / 2;
-      chairs += `<circle cx="${(cx + Math.cos(a) * (R + 20)).toFixed(1)}" cy="${(cy + Math.sin(a) * (R + 20)).toFixed(1)}" r="${chairR}" ${S}/>`;
+    for (let i = 0; i < type.seats; i++) {
+      const a = (i / type.seats) * Math.PI * 2 - Math.PI / 2;
+      const cr = R + chairD * 0.62;
+      chairs += `<circle cx="${(cx + Math.cos(a) * cr).toFixed(1)}" cy="${(cy + Math.sin(a) * cr).toFixed(1)}" r="${(chairW / 2).toFixed(1)}" ${S}/>`;
     }
-    return `<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">${chairs}<circle cx="${cx}" cy="${cy}" r="${R}" ${S}/></svg>`;
+    return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">${chairs}` +
+           `<circle cx="${cx}" cy="${cy}" r="${R}" ${S}/></svg>`;
   }
-  // Rectangle: chairs along the long edges, optionally along one short end.
-  const per = type.seatsPerSide, head = type.headSeats || 0;
-  const W = 300, H = 190, pad = 46, cw = 46, ch = 34;
-  const bodyW = W - pad * 2, bodyH = H - pad * 2;
+
+  const bodyW = type.tableW * U, bodyD = type.tableD * U;
+  const bx = (W - bodyW) / 2, by = (H - bodyD) / 2;
+  const n = type.seatsPerSide;
   let chairs = "";
-  for (let i = 0; i < per; i++) {
-    const x = pad + (bodyW / per) * i + (bodyW / per - cw) / 2;
-    chairs += `<rect x="${x.toFixed(1)}" y="4" width="${cw}" height="${ch}" rx="5" ${S}/>`;
-    chairs += `<rect x="${x.toFixed(1)}" y="${H - ch - 4}" width="${cw}" height="${ch}" rx="5" ${S}/>`;
-  }
-  for (let i = 0; i < head; i++) {
-    const y = pad + (bodyH / head) * i + (bodyH / head - ch) / 2;
-    chairs += `<rect x="4" y="${y.toFixed(1)}" width="${ch}" height="${cw > bodyH ? ch : cw * 0.75}" rx="5" ${S}/>`;
+  for (let i = 0; i < n; i++) {
+    const x = bx + (bodyW / n) * i + (bodyW / n - chairW) / 2;
+    chairs += `<rect x="${x.toFixed(1)}" y="${(by - chairD).toFixed(1)}" width="${chairW}" height="${chairD}" rx="${r}" ${S}/>`;
+    if (!type.oneSided) {
+      chairs += `<rect x="${x.toFixed(1)}" y="${(by + bodyD).toFixed(1)}" width="${chairW}" height="${chairD}" rx="${r}" ${S}/>`;
+    }
   }
   return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">${chairs}` +
-         `<rect x="${pad}" y="${pad}" width="${bodyW}" height="${bodyH}" rx="14" ${S}/></svg>`;
+         `<rect x="${bx}" y="${by}" width="${bodyW}" height="${bodyD}" rx="${r}" ${S}/></svg>`;
 }
 
 // Positions are percentages of the board, not pixels, so a layout arranged on
 // a laptop still reads correctly on a phone.
-// Eight across on the wider board, so 86 unplaced names stack in eleven rows
-// instead of fifteen and leave more clear board to arrange them on.
+// Unplaced names wait in the staging strip below the tent, eight across.
 const SEAT_TRAY_COLS = 8;
 function seatDefaultPos(index) {
   const col = index % SEAT_TRAY_COLS, row = Math.floor(index / SEAT_TRAY_COLS);
-  return {x: 2 + col * 12.2, y: 1.5 + row * 4.2, placed: false};
+  return {x: 2 + col * 12.2,
+          y: ((STAGE_TOP_FT + row * STAGE_ROW_FT) / BOARD_FT.h) * 100,
+          placed: false};
 }
 function seatPos(key, index) {
   const saved = seating.positions[key];
@@ -2709,6 +2758,7 @@ function renderSeating() {
   if (!seating.positions) seating.positions = {};
   if (!Array.isArray(seating.tables)) seating.tables = [];
   const people = allGuestPeople();
+  BOARD_FT.h = boardHeightFt(people.length);
   const placed = people.filter(pr => seating.positions[pr.key]).length;
 
   p.innerHTML = `
@@ -2726,14 +2776,23 @@ function renderSeating() {
     </div>
   </div>
   <div class="seat-board-wrap">
-    <div class="seat-board" id="seat-board">
+    <div class="seat-board" id="seat-board" style="aspect-ratio:${BOARD_FT.w} / ${BOARD_FT.h}; background-size:${(100/BOARD_FT.w).toFixed(4)}% ${(100/BOARD_FT.h).toFixed(4)}%;">
+      <div class="tent-outline" style="
+        left:${((BOARD_FT.w - TENT_FT.w) / 2 / BOARD_FT.w * 100).toFixed(3)}%;
+        top:${(TENT_TOP_FT / BOARD_FT.h * 100).toFixed(3)}%;
+        width:${(TENT_FT.w / BOARD_FT.w * 100).toFixed(3)}%;
+        height:${(TENT_FT.h / BOARD_FT.h * 100).toFixed(3)}%;">
+        <span class="tent-label">${TENT_FT.w}' &times; ${TENT_FT.h}' tent</span>
+      </div>
+      <div class="stage-divider" style="top:${((STAGE_TOP_FT - 1) / BOARD_FT.h * 100).toFixed(3)}%;">
+        <span>Not seated yet - drag into the tent</span>
+      </div>
       ${(seating.tables || []).map(t => {
         const type = tableTypeById(t.type);
         return `<div class="seat-table${seatSel.size === 1 && seatSel.has("t:" + t.id) ? " selected" : ""}${seatSel.has("t:" + t.id) ? " sel" : ""}" data-table-id="${t.id}"
-          style="left:${t.x}%; top:${t.y}%; width:${t.w}%; transform:translate(-50%,-50%) rotate(${t.rot || 0}deg);">
+          style="left:${t.x}%; top:${t.y}%; width:${tableWidthPct(type).toFixed(3)}%; transform:translate(-50%,-50%) rotate(${t.rot || 0}deg);">
           ${tableSvg(type)}
           <span class="seat-table-handle rotate" data-handle="rotate" title="Drag to rotate"></span>
-          <span class="seat-table-handle scale" data-handle="scale" title="Drag to resize"></span>
           <button class="seat-table-del" data-table-del="${t.id}" title="Remove table" aria-label="Remove table">&#10005;</button>
         </div>`;
       }).join("")}
@@ -2746,7 +2805,7 @@ function renderSeating() {
   </div>
   <p class="muted" style="font-size:12px; margin-top:8px;">
     Drag a name onto the board to seat it. Drag across empty board to select several at once, or shift-click to add and remove
-    individual ones, then drag any of them to move the whole group. Select a single table to rotate or resize it.
+    individual ones, then drag any of them to move the whole group. Select a single table to rotate it; tables are drawn to scale and cannot be resized.
     <strong>${navigator.platform.indexOf("Mac") === 0 ? "⌘Z" : "Ctrl+Z"}</strong> undoes the last change on this board
     (<strong>${navigator.platform.indexOf("Mac") === 0 ? "⇧⌘Z" : "Ctrl+Y"}</strong> redoes).
     With tables selected: <strong>${navigator.platform.indexOf("Mac") === 0 ? "⌘C / ⌘V" : "Ctrl+C / Ctrl+V"}</strong> to copy and paste,
@@ -2800,8 +2859,7 @@ function renderSeating() {
       const cr = item.getBoundingClientRect();
       const cx = cr.left + cr.width / 2, cy = cr.top + cr.height / 2;
       mode = handle.dataset.handle;
-      start = {el: item, t, cx, cy, w: t.w, rot: t.rot || 0, pre: seatSnapshot(),
-               dist: Math.hypot(e.clientX - cx, e.clientY - cy),
+      start = {el: item, t, cx, cy, rot: t.rot || 0, pre: seatSnapshot(),
                ang: Math.atan2(e.clientY - cy, e.clientX - cx) * 180 / Math.PI};
       board.setPointerCapture(e.pointerId);
       return;
@@ -2868,13 +2926,6 @@ function renderSeating() {
       if (Math.abs(next - near) < 4) next = near;
       start.t.rot = Math.round(next * 10) / 10;
       start.el.style.transform = `translate(-50%,-50%) rotate(${start.t.rot}deg)`;
-    } else if (mode === "scale") {
-      // Scale from the distance to the centre, so it behaves the same at any
-      // rotation instead of fighting the transform.
-      const d = Math.hypot(e.clientX - start.cx, e.clientY - start.cy);
-      const factor = start.dist > 4 ? d / start.dist : 1;
-      start.t.w = Math.max(6, Math.min(95, Math.round(start.w * factor * 10) / 10));
-      start.el.style.width = start.t.w + "%";
     } else if (mode === "marquee") {
       const r = start.r;
       const x = Math.max(0, Math.min(e.clientX - r.left, r.width));
@@ -2946,7 +2997,7 @@ function renderSeating() {
     const type = tableTypeById(document.getElementById("seat-table-type").value);
     seating.tables = seating.tables || [];
     seatPushUndo();
-    const t = {id: uid(), type: type.id, x: 50, y: 45, w: type.w, rot: 0};
+    const t = {id: uid(), type: type.id, x: 50, y: 50, rot: 0};
     seating.tables.push(t);
     seatSel = new Set([selId("t", t.id)]);
     await save();
