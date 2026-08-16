@@ -2222,14 +2222,16 @@ function allGuestPeople() {
   });
   return out;
 }
-// PLACEHOLDER MENU - replace this list with the real dishes. Nothing else
-// needs to change: a saved pick that is no longer on the list is still shown
-// (see dishOptionsHtml), so swapping these out cannot silently drop a choice.
+// The wedding menu. Swapping this list is safe: dishOptionsHtml keeps a pick
+// that is no longer on it rather than silently resetting the guest to nothing,
+// so a dish being renamed or dropped can never quietly lose someone's choice.
 const MENU_DISHES = [
-  "Dish 1 (placeholder)",
-  "Dish 2 (placeholder)",
-  "Dish 3 (placeholder)",
-  "Dish 4 (placeholder)",
+  "Lobster",
+  "Scallop",
+  "Filet Mignon",
+  "Chicken Breast",
+  "Salmon",
+  "Vegetables",
 ];
 const DISHES_PER_GUEST = 2;
 
