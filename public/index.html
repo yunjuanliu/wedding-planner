@@ -253,12 +253,15 @@
   /* Guest sub-tabs: a lighter, pill-shaped row so they read as a level below
      the main tabs rather than competing with them. */
   .dish-tally { display: flex; gap: 10px; flex-wrap: wrap; }
+  /* Muted on purpose: this is a reference total, not a headline like the
+     guest counts above it. */
   .dish-count {
     flex: 1 1 110px; min-width: 110px;
-    background: var(--primary-light); border-radius: 10px; padding: 10px 12px;
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 12px;
   }
-  .dish-count .num { font-size: 20px; font-weight: 700; color: var(--primary); line-height: 1.1; }
-  .dish-count .lbl { font-size: 12px; color: var(--ink-soft); margin-top: 2px; }
+  .dish-count .num { font-size: 19px; font-weight: 600; color: var(--ink-soft); line-height: 1.1; }
+  .dish-count .lbl { font-size: 12px; color: var(--ink-soft); opacity: 0.8; margin-top: 2px; }
   /* A dish that is no longer on the menu but still chosen by someone. */
   .dish-count.off-menu { background: #FDECEF; }
   .dish-count.off-menu .num { color: #B3253C; }
