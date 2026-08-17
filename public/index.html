@@ -252,6 +252,16 @@
   .area-cover-banner-remove:hover { background: rgba(29,27,41,0.75); color: var(--white); }
   /* Guest sub-tabs: a lighter, pill-shaped row so they read as a level below
      the main tabs rather than competing with them. */
+  .dish-tally { display: flex; gap: 10px; flex-wrap: wrap; }
+  .dish-count {
+    flex: 1 1 110px; min-width: 110px;
+    background: var(--primary-light); border-radius: 10px; padding: 10px 12px;
+  }
+  .dish-count .num { font-size: 20px; font-weight: 700; color: var(--primary); line-height: 1.1; }
+  .dish-count .lbl { font-size: 12px; color: var(--ink-soft); margin-top: 2px; }
+  /* A dish that is no longer on the menu but still chosen by someone. */
+  .dish-count.off-menu { background: #FDECEF; }
+  .dish-count.off-menu .num { color: #B3253C; }
   .subtabs { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
   .subtab {
     border: 1px solid var(--border); background: var(--white); color: var(--ink-soft);
@@ -2343,6 +2353,28 @@ function renderGuests() {
   renderGuestsOverview();
 }
 
+// Counts every dish chosen across the whole guest list. Two picks per person,
+// so the numbers add up to more than the headcount - they are portions to
+// order, which is what a caterer needs.
+function dishTally() {
+  const counts = {};
+  MENU_DISHES.forEach(d => { counts[d] = 0; });
+  let chosen = 0, total = 0;
+  guests.forEach(g => {
+    const seats = [g].concat((g.people || []).filter(p => (p.name || "").trim()));
+    if (!(g.name || "").trim()) seats.shift();
+    seats.forEach(s => {
+      total++;
+      const picks = (s.dishes || []).filter(Boolean);
+      if (picks.length) chosen++;
+      // A dish no longer on the menu is still counted, under its own name,
+      // rather than vanishing from the totals.
+      picks.forEach(d => { counts[d] = (counts[d] || 0) + 1; });
+    });
+  });
+  return {counts, chosen, total, portions: Object.values(counts).reduce((a, b) => a + b, 0)};
+}
+
 function renderGuestsOverview() {
   const p = document.getElementById("guest-subpanel");
   const totalPeople = guests.reduce((s,g) => s + (Number(g.partySize)||0), 0);
@@ -2359,6 +2391,25 @@ function renderGuestsOverview() {
     <div class="stat"><div class="num">${drivingCount}</div><div class="lbl">Driving</div></div>
     <div class="stat"><div class="num">${flyingCount}</div><div class="lbl">Flying in</div></div>
   </div>
+  ${(() => {
+    const t = dishTally();
+    const extras = Object.keys(t.counts).filter(d => MENU_DISHES.indexOf(d) === -1);
+    return `<div class="card" style="margin-bottom:16px;">
+      <div class="row" style="justify-content:space-between; margin-bottom:10px;">
+        <span class="section-title" style="margin:0;">Meal choices</span>
+        <span class="muted" style="font-size:12.5px;">
+          ${t.chosen} of ${t.total} guests chosen &middot; ${t.portions} portion${t.portions === 1 ? "" : "s"}
+          ${t.total - t.chosen ? ` &middot; <strong style="color:#B3253C;">${t.total - t.chosen} still to choose</strong>` : ""}
+        </span>
+      </div>
+      <div class="dish-tally">
+        ${MENU_DISHES.concat(extras).map((d, i) => `<div class="dish-count${MENU_DISHES.indexOf(d) === -1 ? " off-menu" : ""}">
+            <div class="num">${t.counts[d] || 0}</div>
+            <div class="lbl">${MENU_DISHES.indexOf(d) === -1 ? "" : (i + 1) + ". "}${esc(d)}</div>
+          </div>`).join("")}
+      </div>
+    </div>`;
+  })()}
   <div class="add-form">
     <input type="text" id="g-search" placeholder="Search guests" value="${guestSearch}" style="flex:1; min-width:150px;" />
   </div>
