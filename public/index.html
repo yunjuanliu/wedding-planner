@@ -220,6 +220,27 @@
     box-shadow: 0 8px 30px rgba(29, 27, 41, 0.18);
   }
   .modal-box h3 { margin: 0 0 14px; font-size: 16px; font-weight: 600; }
+  /* Ten of the twelve page columns - the same span .wrap gives its children,
+     so the dialog sits exactly over the content width behind it. Mirrors the
+     grid's padding and column-gap at each breakpoint. */
+  .modal-box.wide-10 {
+    width: calc((100vw - 160px - 220px) / 12 * 10 + 180px);
+    max-width: calc(100vw - 40px);
+    max-height: calc(100vh - 40px);
+    overflow-y: auto;
+  }
+  /* Below 1024 the page gives its children all twelve columns, so the dialog
+     follows suit rather than staying at ten and sitting narrower than the
+     cards behind it. */
+  @media (max-width: 1024px) {
+    .modal-box.wide-10 { width: calc(100vw - 80px); }
+  }
+  @media (max-width: 768px) {
+    .modal-box.wide-10 { width: calc(100vw - 48px); }
+  }
+  @media (max-width: 480px) {
+    .modal-box.wide-10 { width: calc(100vw - 24px); }
+  }
   .modal-box input[type=text] { width: 100%; margin-bottom: 16px; }
   .modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
   #input-modal-title { font-size: 20px; margin-bottom: 20px; }
@@ -778,7 +799,11 @@
 </div>
 
 <div class="modal-overlay" id="task-modal">
-  <div class="modal-box" style="max-width:440px;">
+  <!-- 10 of the 12 page columns, matching the content width behind it. The
+       440px box wrapped a long note into a tall thin column, and .modal-box
+       has no max-height, so the overflow ran off screen with nothing to
+       scroll. Capping the height here makes a long note reachable. -->
+  <div class="modal-box wide-10">
 
     <div id="task-view-mode">
       <div class="row" style="justify-content:space-between; align-items:flex-start; margin-bottom:10px;">
@@ -803,7 +828,7 @@
       <label class="muted" style="font-size:12px;">Title</label>
       <input type="text" id="task-modal-title" style="margin-bottom:12px;" />
       <label class="muted" style="font-size:12px;">Notes</label>
-      <textarea id="task-modal-body" rows="6" style="width:100%; margin-bottom:12px; border:1px solid var(--border); border-radius:8px; padding:8px 10px; font-family:inherit; font-size:14px; resize:vertical;"></textarea>
+      <textarea id="task-modal-body" rows="14" style="width:100%; margin-bottom:12px; border:1px solid var(--border); border-radius:8px; padding:8px 10px; font-family:inherit; font-size:14px; resize:vertical;"></textarea>
       <div class="row" style="gap:10px; margin-bottom:12px;">
         <div style="flex:1;">
           <label class="muted" style="font-size:12px;">Due date</label>
@@ -1038,11 +1063,22 @@ function showTaskPreview(item) {
   }
 }
 
+// A fixed row count clipped the longer notes, which are usually pasted lists
+// with many short lines. Grow to fit the text, up to half the viewport; past
+// that the field scrolls itself and the dialog scrolls around it.
+function autoGrowNotes(el) {
+  if (!el) return;
+  el.style.height = "auto";
+  el.style.height = Math.min(el.scrollHeight + 2, window.innerHeight * 0.5) + "px";
+}
+
 function showTaskEditForm(item) {
   document.getElementById("task-view-mode").style.display = "none";
   document.getElementById("task-edit-mode").style.display = "block";
   document.getElementById("task-modal-title").value = item.text || "";
-  document.getElementById("task-modal-body").value = item.body || "";
+  const bodyField = document.getElementById("task-modal-body");
+  bodyField.value = item.body || "";
+  autoGrowNotes(bodyField);
   document.getElementById("task-modal-due").value = item.dueDate || "";
   fillAssigneeSelect(document.getElementById("task-modal-assignee"), item.assignee);
   pendingImageData = item.image || null;
@@ -1239,6 +1275,9 @@ function openTaskEditModal(sectionId, itemId, startInEdit) {
     showTaskPreview(item);
   }
   document.getElementById("task-modal").classList.add("open");
+  // Only now is the field laid out: a display:none element reports no
+  // scrollHeight, which collapsed the notes box to a single line.
+  autoGrowNotes(document.getElementById("task-modal-body"));
 }
 function closeTaskEditModal() {
   editingTask = null;
@@ -1248,7 +1287,7 @@ function closeTaskEditModal() {
 
 document.getElementById("task-edit-btn").addEventListener("click", () => {
   const item = getEditingItem();
-  if (item) showTaskEditForm(item);
+  if (item) { showTaskEditForm(item); autoGrowNotes(document.getElementById("task-modal-body")); }
 });
 document.getElementById("task-view-close").addEventListener("click", closeTaskEditModal);
 document.getElementById("task-modal-cancel").addEventListener("click", () => {
@@ -1257,6 +1296,7 @@ document.getElementById("task-modal-cancel").addEventListener("click", () => {
 document.getElementById("task-modal").addEventListener("click", (e) => {
   if (e.target.id === "task-modal") closeTaskEditModal();
 });
+document.getElementById("task-modal-body").addEventListener("input", (e) => autoGrowNotes(e.currentTarget));
 document.getElementById("task-modal-image").addEventListener("change", async (e) => {
   const file = e.target.files[0];
   if (!file) return;
