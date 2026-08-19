@@ -323,6 +323,13 @@
     max-width: 46%; overflow: hidden; text-overflow: ellipsis;
   }
   .seat-card.placed { background: var(--white); border-color: var(--primary); }
+  /* Gender drives the card colour so the mix at a table reads at a glance. */
+  .seat-card { background: var(--gbg, var(--primary-light)); color: var(--g, var(--primary));
+               border-color: color-mix(in srgb, var(--g, var(--primary)) 35%, white); }
+  .seat-card.placed { background: var(--gbg, var(--white)); border-color: var(--g, var(--primary)); }
+  .seat-card .seat-name { display: block; line-height: 1.15; }
+  .seat-meals { display: flex; gap: 2px; justify-content: center; margin-top: 1px; opacity: 0.85; }
+  .seat-meals svg { display: block; }
   .seat-card.dragging { cursor: grabbing; box-shadow: 0 6px 18px rgba(29,27,41,0.22); z-index: 5; opacity: 0.95; }
   /* Tables sit under the names: the plan is the backdrop, the names are read. */
   .seat-table { position: absolute; z-index: 1; cursor: grab; touch-action: none; }
@@ -466,14 +473,17 @@
   .guest-dishes select { flex: 1 1 0; min-width: 0; }
   .person-row { padding: 4px 0; }
   .person-row > [data-person-name] { grid-column: 1 / 5; width: 100%; }
-  .person-row > .kid-toggle { grid-column: 6; }
+  .person-row > .gender-cell { grid-column: 6; }
   .person-row > [data-action=remove-person] { grid-column: 7; }
-  .kid-toggle {
-    display: inline-flex; align-items: center; gap: 5px;
-    font-size: 12px; color: var(--ink-soft); cursor: pointer; user-select: none;
+  .gender-cell { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .gender-select { font-size: 12px; font-weight: 600; padding: 4px 6px; min-width: 78px; }
+  /* The seat number is derived from the plan, so it reads as a fact rather
+     than a field someone can type into. */
+  .seat-chip {
+    flex: 0 0 auto; font-size: 11px; font-weight: 700; letter-spacing: 0.2px;
+    color: var(--primary); background: var(--primary-light);
+    border-radius: 10px; padding: 2px 7px; white-space: nowrap;
   }
-  .kid-toggle input { margin: 0; cursor: pointer; }
-  .kid-toggle:has(input:checked) { color: #C23568; font-weight: 600; }
   .person-add-row { padding: 2px 0 10px; }
   .person-add-row > .link-btn { grid-column: 1 / 5; font-size: 12.5px; }
   /* The add-note button is clutter on the many rows that have no note, but
@@ -2255,6 +2265,91 @@ async function pruneOrphanGuestData() {
   return dead.length;
 }
 
+// ---- gender ----------------------------------------------------------
+// Replaces the old kid checkbox. "kid" lives on the same axis as male/female
+// because a card is one colour, and a child's tag and seat are treated the
+// same way whichever they are.
+const GENDERS = [
+  {id: "",       label: "—",      color: "var(--ink-soft)", bg: "var(--white)"},
+  {id: "male",   label: "Male",   color: "#1D5FA8",         bg: "#E3EFFB"},
+  {id: "female", label: "Female", color: "#B3357A",         bg: "#FCE6F2"},
+  {id: "kid",    label: "Kid",    color: "#5B5B66",         bg: "#ECECF1"},
+];
+function genderOf(p) {
+  // Anyone ticked as a kid before the dropdown existed keeps that meaning.
+  if (p.gender) return p.gender;
+  return p.isKid ? "kid" : "";
+}
+function genderMeta(id) { return GENDERS.find(x => x.id === id) || GENDERS[0]; }
+function genderOptionsHtml(cur) {
+  return GENDERS.map(x => `<option value="${x.id}" ${x.id === cur ? "selected" : ""}>${x.label}</option>`).join("");
+}
+
+// ---- seat numbers ----------------------------------------------------
+// A card's seat is read off the plan rather than typed: whichever numbered
+// table it sits nearest, then its position in reading order around that
+// table - down the rows, left to right. Arrange the board, get the numbers.
+function tableNumberOf(t) {
+  const m = /(\d+)/.exec(t.label || "");        // "Table 7", and the "Tabel 3" typo
+  return m ? Number(m[1]) : null;
+}
+function seatAssignments() {
+  const out = {};
+  if (!seating || !seating.positions) return out;
+  const tables = (seating.tables || [])
+    .map(t => ({t, n: tableNumberOf(t)}))
+    .filter(x => x.n !== null);
+  if (!tables.length) return out;
+
+  const people = allGuestPeople();
+  const placed = people.filter(p => seating.positions[p.key]);
+  const claimed = {};
+  placed.forEach(p => {
+    const pos = seating.positions[p.key];
+    let best = null;
+    tables.forEach(({t, n}) => {
+      const fp = tableFootprintFt(t);
+      // distance in feet, so a wide table does not out-reach a small one
+      const dx = (pos.x - t.x) / 100 * BOARD_FT.w;
+      const dy = (pos.y - t.y) / 100 * BOARD_FT.h;
+      const d = Math.hypot(dx, dy);
+      const reach = Math.hypot(fp.w, fp.h) / 2 + 3;   // half-diagonal plus a chair
+      if (d <= reach && (!best || d < best.d)) best = {d, t, n};
+    });
+    if (!best) return;
+    (claimed[best.n] = claimed[best.n] || []).push({p, pos, t: best.t});
+  });
+
+  Object.keys(claimed).forEach(n => {
+    const t = claimed[n][0].t;
+    // Numbered the way the plan is read: down the table in rows, left to
+    // right within each row. Sorting purely by y would flip a pair whose
+    // cards sit a few hundredths of a foot apart, so rows are grouped with a
+    // tolerance first - the two seats facing each other are one row.
+    const withXY = claimed[n].map(c => ({
+      c,
+      x: (c.pos.x - t.x) / 100 * BOARD_FT.w,
+      y: (c.pos.y - t.y) / 100 * BOARD_FT.h,
+    })).sort((a, b) => a.y - b.y);
+
+    const ROW_TOL = 1.2;                       // feet; chairs pair up closer than they stack
+    const rows = [];
+    withXY.forEach(item => {
+      const row = rows[rows.length - 1];
+      if (row && Math.abs(item.y - row[0].y) <= ROW_TOL) row.push(item);
+      else rows.push([item]);
+    });
+
+    let seat = 0;
+    rows.forEach(row => {
+      row.sort((a, b) => a.x - b.x)
+         .forEach(item => { out[item.c.p.key] = `T${n}-${++seat}`; });
+    });
+  });
+
+  return out;
+}
+
 function firstNameOf(n) {
   const t = (n || "").trim();
   return t ? t.split(/\s+/)[0] : "";
@@ -2266,11 +2361,13 @@ function allGuestPeople() {
   const out = [];
   guests.forEach(g => {
     if ((g.name || "").trim()) {
-      out.push({key: g.id, first: firstNameOf(g.name), full: g.name.trim(), household: g.name.trim(), isKid: false});
+      out.push({key: g.id, first: firstNameOf(g.name), full: g.name.trim(), household: g.name.trim(),
+                isKid: genderOf(g) === "kid", gender: genderOf(g), dishes: g.dishes || []});
     }
     (g.people || []).forEach(pr => {
       if (!(pr.name || "").trim()) return;
-      out.push({key: pr.id, first: firstNameOf(pr.name), full: pr.name.trim(), household: (g.name || "").trim(), isKid: !!pr.isKid});
+      out.push({key: pr.id, first: firstNameOf(pr.name), full: pr.name.trim(), household: (g.name || "").trim(),
+                isKid: genderOf(pr) === "kid", gender: genderOf(pr), dishes: pr.dishes || []});
     });
   });
   return out;
@@ -2287,6 +2384,24 @@ const MENU_DISHES = [
   "Vegetables",
 ];
 const DISHES_PER_GUEST = 2;
+
+// A glyph per dish, drawn small enough to read on a seat card at arm's length.
+// Keyed by dish name so renaming the menu shows a blank rather than the wrong
+// food, which is worse than none when someone is carrying plates.
+const DISH_ICONS = {
+  "Lobster": '<path d="M8 3.2c0 1.2-1 1.9-2 2.2M12 3.2c0 1.2 1 1.9 2 2.2M10 5.4c-1.6 0-2.7 1.1-2.7 2.6 0 2 1.2 3.4 2.7 5 1.5-1.6 2.7-3 2.7-5 0-1.5-1.1-2.6-2.7-2.6Z"/><path d="M6.6 8.2 4.4 7M13.4 8.2l2.2-1.2M6.9 10.6l-2.4.6M13.1 10.6l2.4.6"/>',
+  "Scallop": '<path d="M10 15.2 3.6 7.4A4.6 4.6 0 0 1 10 4.4a4.6 4.6 0 0 1 6.4 3L10 15.2Z"/><path d="M10 4.6v10M7.2 5.4 8.6 14M12.8 5.4 11.4 14"/>',
+  "Filet Mignon": '<path d="M10 4.2c3.2 0 5.6 2 5.6 4.6 0 3.2-2.6 6.6-5.6 6.6S4.4 12 4.4 8.8C4.4 6.2 6.8 4.2 10 4.2Z"/><path d="M10 7c1.5 0 2.6.9 2.6 2.1 0 1.5-1.2 3-2.6 3s-2.6-1.5-2.6-3C7.4 7.9 8.5 7 10 7Z"/>',
+  "Chicken Breast": '<path d="M12.6 4.6c2 .7 3 2.4 2.6 4.2-.5 2.2-2.6 3.6-5 3.9-1.7.2-3-.3-3.7-1.3"/><path d="M6.5 11.4 4.2 14M4.2 14l-1.1 1.2M4.2 14l1.3 1.1"/><path d="M12.6 4.6c-2-.7-4 .1-4.8 1.7-.6 1.2-.3 2.4.5 3.2"/>',
+  "Salmon": '<path d="M3.4 10c2-2.6 4.6-4 7.3-4 2.6 0 4.6 1.3 5.9 4-1.3 2.7-3.3 4-5.9 4-2.7 0-5.3-1.4-7.3-4Z"/><path d="M16.6 10 18.6 7.6M16.6 10l2 2.4M6.6 8.8h.01"/>',
+  "Vegetables": '<path d="M10 15.4V9.6"/><path d="M10 9.6c-2.6 0-4.2-1.3-4.2-3.1C5.8 5 6.9 4 8.3 4c.3-1 1-1.6 1.7-1.6S11.4 3 11.7 4c1.4 0 2.5 1 2.5 2.5 0 1.8-1.6 3.1-4.2 3.1Z"/><path d="M10 12.6c1.6 0 2.8-.9 3.2-2.2M10 12.6c-1.6 0-2.8-.9-3.2-2.2"/>',
+};
+function dishIconSvg(dish, size) {
+  const d = DISH_ICONS[dish];
+  if (!d) return "";
+  return `<svg width="${size}" height="${size}" viewBox="0 0 20 20" fill="none" stroke="currentColor"` +
+         ` stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+}
 
 function dishOptionsHtml(current) {
   const opts = MENU_DISHES.slice();
@@ -2420,6 +2535,7 @@ function dishTally() {
 
 function renderGuestsOverview() {
   const p = document.getElementById("guest-subpanel");
+  const seats = seatAssignments();
   const totalPeople = guests.reduce((s,g) => s + (Number(g.partySize)||0), 0);
   const drivingCount = guests.filter(g => g.transport === "Driving").length;
   const flyingCount = guests.filter(g => g.transport === "Flying").length;
@@ -2492,6 +2608,11 @@ function renderGuestsOverview() {
         <div class="guest-dishes">
           ${g.dishes.map((d, i) => `<select data-id="${g.id}" data-dish="${i}" title="Dish ${i+1}">${dishOptionsHtml(d)}</select>`).join("")}
         </div>
+        <div class="gender-cell">
+          <select class="gender-select" data-id="${g.id}" data-gender title="Guest type"
+            style="color:${genderMeta(genderOf(g)).color};">${genderOptionsHtml(genderOf(g))}</select>
+          ${seats[g.id] ? `<span class="seat-chip" title="Read from the seating plan">${seats[g.id]}</span>` : ""}
+        </div>
         ${g.dietary
           ? `<span class="muted" data-id="${g.id}" data-action="edit-dietary" style="cursor:pointer; border-bottom:1px dashed transparent;" title="Click to edit">${esc(g.dietary)}</span>`
           : `<button class="icon-btn dietary-add" data-id="${g.id}" data-action="add-dietary" title="Add dietary note">+ Dietary</button>`}
@@ -2504,10 +2625,11 @@ function renderGuestsOverview() {
           <div class="guest-dishes">
             ${pr.dishes.map((d, i) => `<select data-gid="${g.id}" data-pid="${pr.id}" data-person-dish="${i}" title="Dish ${i+1}">${dishOptionsHtml(d)}</select>`).join("")}
           </div>
-          <label class="kid-toggle" title="Tick if this guest is a child - kids are left out of the adult name export">
-            <input type="checkbox" data-gid="${g.id}" data-pid="${pr.id}" data-person-kid ${pr.isKid ? "checked" : ""} />
-            <span>Kid</span>
-          </label>
+          <div class="gender-cell">
+            <select class="gender-select" data-gid="${g.id}" data-pid="${pr.id}" data-person-gender title="Guest type"
+              style="color:${genderMeta(genderOf(pr)).color};">${genderOptionsHtml(genderOf(pr))}</select>
+            ${seats[pr.id] ? `<span class="seat-chip" title="Read from the seating plan">${seats[pr.id]}</span>` : ""}
+          </div>
           <button class="icon-btn" data-gid="${g.id}" data-pid="${pr.id}" data-action="remove-person" aria-label="Remove ${esc(pr.name) || "guest"}">${TRASH_ICON}</button>
         </div>`).join("")}
       <div class="person-row person-add-row">
@@ -2602,11 +2724,26 @@ function renderGuestsOverview() {
       await saveKey("wedding-guests", guests);
     });
   });
-  list.querySelectorAll("[data-person-kid]").forEach(cb => {
-    cb.addEventListener("change", async (e) => {
+  list.querySelectorAll("[data-person-gender]").forEach(sel => {
+    sel.addEventListener("change", async (e) => {
       const found = findPerson(e.currentTarget.dataset.gid, e.currentTarget.dataset.pid);
       if (!found) return;
-      found.person.isKid = e.currentTarget.checked;
+      const v = e.currentTarget.value;
+      found.person.gender = v;
+      // isKid stays in step: the name tag export and the kid badge read it.
+      found.person.isKid = v === "kid";
+      e.currentTarget.style.color = genderMeta(v).color;
+      await saveKey("wedding-guests", guests);
+    });
+  });
+  list.querySelectorAll("[data-gender]").forEach(sel => {
+    sel.addEventListener("change", async (e) => {
+      const g = guests.find(x => x.id === e.currentTarget.dataset.id);
+      if (!g) return;
+      const v = e.currentTarget.value;
+      g.gender = v;
+      g.isKid = v === "kid";
+      e.currentTarget.style.color = genderMeta(v).color;
       await saveKey("wedding-guests", guests);
     });
   });
@@ -2971,6 +3108,7 @@ function renderSeating() {
   if (!Array.isArray(seating.tables)) seating.tables = [];
   seating.tables.forEach(normalizeTableChairs);
   const people = allGuestPeople();
+  const seatLabels = seatAssignments();
   BOARD_FT.h = boardHeightFt(people.length);
   const placed = people.filter(pr => seating.positions[pr.key]).length;
 
@@ -3020,8 +3158,15 @@ function renderSeating() {
       }).join("")}
       ${people.map((pr, i) => {
         const pos = seatPos(pr.key, i);
-        return `<div class="seat-card${pos.placed ? " placed" : ""}${seatSel.has("c:" + pr.key) ? " sel" : ""}" data-seat-key="${pr.key}"
-          style="left:${pos.x}%; top:${pos.y}%;" title="${esc(pr.full)}${pr.household && pr.household !== pr.full ? " - " + esc(pr.household) : ""}">${esc(pr.first)}</div>`;
+        const gm = genderMeta(pr.gender);
+        const icons = (pr.dishes || []).filter(Boolean).map(d => dishIconSvg(d, 11)).join("");
+        const seat = seatLabels[pr.key];
+        return `<div class="seat-card${pos.placed ? " placed" : ""}${seatSel.has("c:" + pr.key) ? " sel" : ""}"
+          data-seat-key="${pr.key}" style="left:${pos.x}%; top:${pos.y}%; --g:${gm.color}; --gbg:${gm.bg};"
+          title="${esc(pr.full)}${seat ? " - " + seat : ""}${pr.household && pr.household !== pr.full ? " - " + esc(pr.household) : ""}${(pr.dishes||[]).filter(Boolean).length ? " - " + esc((pr.dishes||[]).filter(Boolean).join(", ")) : ""}">
+          <span class="seat-name">${esc(pr.first)}</span>
+          ${icons ? `<span class="seat-meals">${icons}</span>` : ""}
+        </div>`;
       }).join("")}
     </div>
   </div>
