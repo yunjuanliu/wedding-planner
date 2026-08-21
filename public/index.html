@@ -303,6 +303,28 @@
   th:hover .nt-col-remove { opacity: 1; }
   /* Portrait board, matching the proportions of a printed seating sign. */
   .seat-board-wrap { overflow-x: auto; }
+  #print-root { display: none; }
+  /* Laid out but not shown, so the crop can be measured at printed size. */
+  #print-root.measuring {
+    display: block; position: fixed; left: -10000px; top: 0; visibility: hidden;
+  }
+  @media print {
+    /* The plan is a scale drawing, so it prints as one page at whatever
+       size makes it fit - never reflowed and never split across sheets. */
+    @page { size: A4 portrait; margin: 8mm; }
+    body.printing-map > *:not(#print-root) { display: none !important; }
+    body.printing-map { background: #fff; }
+    body.printing-map #print-root {
+      display: block; margin: 0 auto;
+      position: relative; overflow: hidden;   /* crops the board to the tent */
+      visibility: visible; left: auto;
+    }
+    /* The card colours are the map's content, not decoration. */
+    body.printing-map #print-root *,
+    body.printing-map #print-root {
+      -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    }
+  }
   .seat-zoom { display: inline-flex; align-items: center; gap: 2px; }
   .seat-zoom button { min-width: 28px; padding: 4px 6px; font-weight: 700; }
   .seat-zoom button:disabled { opacity: 0.4; cursor: default; }
@@ -3101,6 +3123,110 @@ function applySeatZoom() {
   if (dec) dec.disabled = i <= 0;
   if (inc) inc.disabled = i >= SEAT_ZOOMS.length - 1;
 }
+// A4 portrait, less the 8mm @page margin, expressed in CSS px at 96dpi.
+const PRINT_PAGE_MM = {w: 210 - 16, h: 297 - 16};
+const PRINT_BOARD_PX = 1100;
+const PRINT_CROP_PAD_FT = 1.5;   // so a card sitting on the tent line is not sliced
+
+// The printed rectangle: the tent, plus a little bleed, widened if any
+// table or name card actually sits outside it. Measured rather than
+// assumed - a card nudged past the tent edge should not be cropped away
+// on the one copy the staff are holding.
+function printCropFt(container) {
+  const pad = PRINT_CROP_PAD_FT;
+  let x0 = (BOARD_FT.w - TENT_FT.w) / 2 - pad;
+  let y0 = TENT_TOP_FT - pad;
+  let x1 = x0 + TENT_FT.w + pad * 2;
+  let y1 = y0 + TENT_FT.h + pad * 2;
+  if (container) {
+    const br = container.getBoundingClientRect();
+    container.querySelectorAll(".seat-card, .seat-table").forEach(el => {
+      const e = el.getBoundingClientRect();
+      x0 = Math.min(x0, (e.left  - br.left) / br.width  * BOARD_FT.w - 0.5);
+      y0 = Math.min(y0, (e.top   - br.top)  / br.height * BOARD_FT.h - 0.5);
+      x1 = Math.max(x1, (e.right - br.left) / br.width  * BOARD_FT.w + 0.5);
+      y1 = Math.max(y1, (e.bottom - br.top) / br.height * BOARD_FT.h + 0.5);
+    });
+  }
+  x0 = Math.max(0, x0); y0 = Math.max(0, y0);
+  x1 = Math.min(BOARD_FT.w, x1); y1 = Math.min(BOARD_FT.h, y1);
+  return {x: x0, y: y0, w: x1 - x0, h: y1 - y0};
+}
+
+function printSeatMap() {
+  const board = document.getElementById("seat-board");
+  const root = document.getElementById("print-root");
+  if (!board || !root) return;
+  const r = board.getBoundingClientRect();
+
+  const clone = board.cloneNode(true);
+  clone.removeAttribute("id");
+  // Nothing on paper can be clicked, so the editing affordances go: a
+  // selected table would otherwise print its delete crosses and pencil.
+  clone.querySelectorAll(".selected").forEach(el => el.classList.remove("selected"));
+  // The staging strip below the tent is a working area, not part of the
+  // plan; its divider sits close enough to the tent edge to bleed into
+  // the crop, so it goes with the buttons.
+  clone.querySelectorAll("button, .seat-marquee, .stage-divider").forEach(el => el.remove());
+
+  // Laid out at a fixed reference width, not the browser's. Scaling the
+  // window's own pixels would print larger names on a laptop than on a
+  // wide monitor, because the names are a fixed size and the board is
+  // fluid. This width is the one the board has on a full-size desktop, so
+  // the sheet matches the spacing arranged on screen at 100%.
+  const w = PRINT_BOARD_PX, h = w * (r.height / r.width);
+  clone.style.width = w + "px";
+  clone.style.height = h + "px";
+  clone.style.setProperty("--seat-zoom", 1);   // the clone inherits no zoom
+  clone.style.position = "absolute";
+  clone.style.top = "0";
+  clone.style.left = "0";
+  clone.style.border = "none";
+  clone.style.borderRadius = "0";
+
+  // Measured inside the clone, not on screen. A card's width comes from
+  // the name in it and does not scale with the board, so on a narrow
+  // window the cards are relatively larger and the crop came out wider
+  // than it prints. Measure where the board is the size it will print at.
+  root.innerHTML = "";
+  root.classList.add("measuring");
+  root.style.width = w + "px";
+  root.style.height = h + "px";
+  root.appendChild(clone);
+
+  // Print the tent, not the board. The board carries margin on all sides
+  // so tables can be dragged, and a staging strip below for names not yet
+  // seated; none of that is the plan, and on A4 it was eating a third of
+  // the sheet - which is why the names came out too small to read.
+  const crop = printCropFt(clone);
+  root.classList.remove("measuring");
+  const cropX = w * crop.x / BOARD_FT.w, cropY = h * crop.y / BOARD_FT.h;
+  const cropW = w * crop.w / BOARD_FT.w, cropH = h * crop.h / BOARD_FT.h;
+
+  const px = 96 / 25.4;
+  const scale = Math.min(PRINT_PAGE_MM.w * px / cropW, PRINT_PAGE_MM.h * px / cropH);
+  clone.style.transformOrigin = "top left";
+  clone.style.transform = `scale(${scale}) translate(${-cropX}px, ${-cropY}px)`;
+
+  // The transform does not affect layout, so the wrapper carries the
+  // printed size - without it the page would be blank or overflow - and
+  // clips everything outside the tent.
+  root.style.width = (cropW * scale) + "px";
+  root.style.height = (cropH * scale) + "px";
+
+  document.body.classList.add("printing-map");
+  window.print();
+  return {scale, w: cropW * scale, h: cropH * scale, crop};
+}
+window.addEventListener("afterprint", () => {
+  document.body.classList.remove("printing-map");
+  const root = document.getElementById("print-root");
+  if (root) {
+    root.classList.remove("measuring");
+    root.innerHTML = ""; root.style.width = ""; root.style.height = "";
+  }
+});
+
 async function stepSeatZoom(dir) {
   const i = SEAT_ZOOMS.indexOf(seatZoom()) + dir;
   if (i < 0 || i >= SEAT_ZOOMS.length) return;
@@ -3283,6 +3409,7 @@ function renderSeating() {
       </select>
       <button id="seat-add-table">+ Add table</button>
       <button id="seat-reset">Reset layout</button>
+      <button id="seat-print" title="Print the whole plan on one A4 sheet">Print map</button>
       <span class="seat-zoom">
         <button id="seat-zoom-out" title="Draw the plan smaller" aria-label="Zoom out">&minus;</button>
         <span id="seat-zoom-val">100%</span>
@@ -3590,6 +3717,7 @@ function renderSeating() {
     renderSeating();
   });
 
+  document.getElementById("seat-print").addEventListener("click", printSeatMap);
   document.getElementById("seat-zoom-out").addEventListener("click", () => stepSeatZoom(-1));
   document.getElementById("seat-zoom-in").addEventListener("click", () => stepSeatZoom(1));
   applySeatZoom();
@@ -5349,5 +5477,6 @@ function renderDashboard() {
   writeDailySnapshotIfNeeded();
 })();
 </script>
+<div id="print-root" aria-hidden="true"></div>
 </body>
 </html>
