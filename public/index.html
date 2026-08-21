@@ -690,7 +690,7 @@
   <div class="tabs">
     <div class="tab active" data-tab="dashboard" data-icon="grid"><span>Dashboard</span></div>
     <div class="tab" data-tab="todo" data-icon="check"><span>To-do</span></div>
-    <div class="tab" data-tab="guests" data-icon="users"><span>Guest count</span></div>
+    <div class="tab" data-tab="guests" data-icon="users"><span>Guest</span></div>
     <div class="tab" data-tab="budget" data-icon="wallet"><span>Budget</span></div>
     <div class="tab" data-tab="timeline" data-icon="clock"><span>Timeline</span></div>
     <div class="tab" data-tab="activities" data-icon="table"><span>Activity</span></div>
@@ -2556,14 +2556,18 @@ function renderGuests() {
 // Counts every dish chosen across the whole guest list. Two picks per person,
 // so the numbers add up to more than the headcount - they are portions to
 // order, which is what a caterer needs.
+// Adults only. Kids do not order from this menu, so counting them left a
+// "still to choose" gap that could never close, and inflated the portion
+// base the kitchen orders against.
 function dishTally() {
   const counts = {};
   MENU_DISHES.forEach(d => { counts[d] = 0; });
-  let chosen = 0, total = 0;
+  let chosen = 0, total = 0, kids = 0;
   guests.forEach(g => {
     const seats = [g].concat((g.people || []).filter(p => (p.name || "").trim()));
     if (!(g.name || "").trim()) seats.shift();
     seats.forEach(s => {
+      if (genderOf(s) === "kid") { kids++; return; }
       total++;
       const picks = (s.dishes || []).filter(Boolean);
       if (picks.length) chosen++;
@@ -2572,7 +2576,7 @@ function dishTally() {
       picks.forEach(d => { counts[d] = (counts[d] || 0) + 1; });
     });
   });
-  return {counts, chosen, total, portions: Object.values(counts).reduce((a, b) => a + b, 0)};
+  return {counts, chosen, total, kids, portions: Object.values(counts).reduce((a, b) => a + b, 0)};
 }
 
 // The print run for menu cards. A guest's two dishes are a set, not a
@@ -2681,8 +2685,9 @@ function renderGuestsOverview() {
       <div class="row" style="justify-content:space-between; margin-bottom:10px;">
         <span class="section-title" style="margin:0;">Meal choices</span>
         <span class="muted" style="font-size:12.5px;">
-          ${t.chosen} of ${t.total} guests chosen &middot; ${t.portions} portion${t.portions === 1 ? "" : "s"}
+          ${t.chosen} of ${t.total} adults chosen &middot; ${t.portions} portion${t.portions === 1 ? "" : "s"}
           ${t.total - t.chosen ? ` &middot; <strong style="color:#B3253C;">${t.total - t.chosen} still to choose</strong>` : ""}
+          ${t.kids ? ` &middot; ${t.kids} kid${t.kids === 1 ? "" : "s"} not counted` : ""}
         </span>
       </div>
       <div class="dish-tally">
