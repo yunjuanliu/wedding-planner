@@ -2326,6 +2326,7 @@ const GUEST_SEED = [
 let guests = [];
 
 let guestSearch = "";
+let nameTagSearch = "";
 let guestSubTab = "overview";
 // Kept in their own rows rather than inside wedding-guests: the guest list is
 // edited constantly, and craft/seat progress should not ride along with every
@@ -3022,6 +3023,23 @@ function ensureNameTagColumns() {
   return false;
 }
 
+// Hides rows rather than re-rendering: the checkboxes carry unsaved focus
+// and a rebuild on every keystroke would drop the caret out of the field.
+function applyNameTagFilter() {
+  const q = nameTagSearch.trim().toLowerCase();
+  const rows = document.querySelectorAll("#nt-body tr[data-search]");
+  let shown = 0;
+  rows.forEach(tr => {
+    const hit = !q || tr.dataset.search.indexOf(q) !== -1;
+    tr.style.display = hit ? "" : "none";
+    if (hit) shown++;
+  });
+  const empty = document.getElementById("nt-empty");
+  if (empty) empty.style.display = (q && shown === 0 && rows.length) ? "" : "none";
+  const out = document.getElementById("nt-shown");
+  if (out) out.textContent = q ? shown + " of " + rows.length + " shown" : "";
+}
+
 function renderNameTags() {
   const p = document.getElementById("guest-subpanel");
   if (ensureNameTagColumns()) saveKey("wedding-nametags", nameTags);
@@ -3033,6 +3051,11 @@ function renderNameTags() {
   let html = `<div class="stat-row">
     <div class="stat"><div class="num">${people.length}</div><div class="lbl">Guests</div></div>
     ${cols.map((c, i) => `<div class="stat"><div class="num">${counts[i]} / ${people.length}</div><div class="lbl">${esc(c.label)}</div></div>`).join("")}
+  </div>
+  <div class="add-form">
+    <input type="text" id="nt-search" placeholder="Search by name, household or table (e.g. T3)"
+      value="${esc(nameTagSearch)}" style="flex:1; min-width:150px;" />
+    <span id="nt-shown" class="muted" style="font-size:12.5px; align-self:center;"></span>
   </div>
   <div class="table-wrap">
     <table class="data-table" style="min-width:${340 + cols.length * 150}px;">
@@ -3048,13 +3071,18 @@ function renderNameTags() {
           </button>
         </th>
       </tr></thead>
-      <tbody>`;
+      <tbody id="nt-body">`;
 
   if (people.length === 0) {
     html += `<tr><td colspan="${cols.length + 2}" class="muted" style="padding:12px;">No named guests yet. Add them in the Overview tab.</td></tr>`;
   } else {
+    const seats = seatAssignments();
     people.forEach(pr => {
-      html += `<tr>
+      // Everything a tag might be looked up by, folded once at render time
+      // rather than recomputed on every keystroke.
+      const hay = [pr.first, pr.full, pr.household || "", seats[pr.key] || ""]
+        .join(" ").toLowerCase();
+      html += `<tr data-search="${esc(hay)}">
         <td><span style="font-weight:600;">${esc(pr.first)}</span>
           ${pr.full !== pr.first ? `<span class="muted" style="font-size:12px;"> ${esc(pr.full.slice(pr.first.length).trim())}</span>` : ""}
           ${pr.isKid ? '<span style="margin-left:6px; background:#FBE9EF; color:#C23568; border-radius:10px; padding:1px 7px; font-size:11px; font-weight:600;">kid</span>' : ""}
@@ -3067,8 +3095,15 @@ function renderNameTags() {
       </tr>`;
     });
   }
+  html += `<tr id="nt-empty" style="display:none;"><td colspan="${cols.length + 2}" class="muted" style="padding:12px;">No guest matches your search.</td></tr>`;
   html += `</tbody></table></div>`;
   p.innerHTML = html;
+
+  document.getElementById("nt-search").addEventListener("input", (e) => {
+    nameTagSearch = e.target.value;
+    applyNameTagFilter();      // rows are hidden in place, so the field keeps focus
+  });
+  applyNameTagFilter();
 
   p.querySelectorAll("[data-nt-person]").forEach(cb => {
     cb.addEventListener("change", async (e) => {
