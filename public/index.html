@@ -3047,6 +3047,7 @@ function renderNameTags() {
   const cols = nameTags.columns;
 
   const counts = cols.map(c => people.filter(pr => (nameTags.done[pr.key] || {})[c.id]).length);
+  const seats = seatAssignments();
 
   let html = `<div class="stat-row">
     <div class="stat"><div class="num">${people.length}</div><div class="lbl">Guests</div></div>
@@ -3058,9 +3059,10 @@ function renderNameTags() {
     <span id="nt-shown" class="muted" style="font-size:12.5px; align-self:center;"></span>
   </div>
   <div class="table-wrap">
-    <table class="data-table" style="min-width:${340 + cols.length * 150}px;">
+    <table class="data-table" style="min-width:${426 + cols.length * 150}px;">
       <thead><tr>
         <th style="min-width:150px;">First name</th>
+        <th style="width:86px;">Table</th>
         ${cols.map(c => `<th style="width:150px; text-align:center;">
             <span class="nt-col-label" data-col-rename="${c.id}" title="Click to rename">${esc(c.label)}</span>
             ${cols.length > 1 ? `<button class="icon-btn nt-col-remove" data-col-remove="${c.id}" aria-label="Remove ${esc(c.label)} column" title="Remove column">&#10005;</button>` : ""}
@@ -3074,9 +3076,8 @@ function renderNameTags() {
       <tbody id="nt-body">`;
 
   if (people.length === 0) {
-    html += `<tr><td colspan="${cols.length + 2}" class="muted" style="padding:12px;">No named guests yet. Add them in the Overview tab.</td></tr>`;
+    html += `<tr><td colspan="${cols.length + 3}" class="muted" style="padding:12px;">No named guests yet. Add them in the Overview tab.</td></tr>`;
   } else {
-    const seats = seatAssignments();
     people.forEach(pr => {
       // Everything a tag might be looked up by, folded once at render time
       // rather than recomputed on every keystroke.
@@ -3087,6 +3088,9 @@ function renderNameTags() {
           ${pr.full !== pr.first ? `<span class="muted" style="font-size:12px;"> ${esc(pr.full.slice(pr.first.length).trim())}</span>` : ""}
           ${pr.isKid ? '<span style="margin-left:6px; background:#FBE9EF; color:#C23568; border-radius:10px; padding:1px 7px; font-size:11px; font-weight:600;">kid</span>' : ""}
         </td>
+        <td>${seats[pr.key]
+          ? `<span class="seat-chip">${esc(seats[pr.key])}</span>`
+          : `<span class="muted" style="font-size:12px;">not seated</span>`}</td>
         ${cols.map(c => `<td style="text-align:center;">
           <input type="checkbox" data-nt-person="${pr.key}" data-nt-col="${c.id}" ${(nameTags.done[pr.key]||{})[c.id] ? "checked" : ""}
             aria-label="${esc(c.label)} for ${esc(pr.full)}" style="width:16px; height:16px;" />
@@ -3095,7 +3099,7 @@ function renderNameTags() {
       </tr>`;
     });
   }
-  html += `<tr id="nt-empty" style="display:none;"><td colspan="${cols.length + 2}" class="muted" style="padding:12px;">No guest matches your search.</td></tr>`;
+  html += `<tr id="nt-empty" style="display:none;"><td colspan="${cols.length + 3}" class="muted" style="padding:12px;">No guest matches your search.</td></tr>`;
   html += `</tbody></table></div>`;
   p.innerHTML = html;
 
