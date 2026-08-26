@@ -3043,14 +3043,19 @@ function applyNameTagFilter() {
 function renderNameTags() {
   const p = document.getElementById("guest-subpanel");
   if (ensureNameTagColumns()) saveKey("wedding-nametags", nameTags);
-  const people = allGuestPeople();
+  // Kids get no name tag - they are left out of the printed sheets and the
+  // adult names export too, so listing them here only ever showed rows
+  // that could not be completed.
+  const everyone = allGuestPeople();
+  const people = everyone.filter(pr => pr.gender !== "kid");
+  const kids = everyone.length - people.length;
   const cols = nameTags.columns;
 
   const counts = cols.map(c => people.filter(pr => (nameTags.done[pr.key] || {})[c.id]).length);
   const seats = seatAssignments();
 
   let html = `<div class="stat-row">
-    <div class="stat"><div class="num">${people.length}</div><div class="lbl">Guests</div></div>
+    <div class="stat"><div class="num">${people.length}</div><div class="lbl">Adults${kids ? ` &middot; ${kids} kid${kids === 1 ? "" : "s"} not included` : ""}</div></div>
     ${cols.map((c, i) => `<div class="stat"><div class="num">${counts[i]} / ${people.length}</div><div class="lbl">${esc(c.label)}</div></div>`).join("")}
   </div>
   <div class="add-form">
@@ -3076,7 +3081,7 @@ function renderNameTags() {
       <tbody id="nt-body">`;
 
   if (people.length === 0) {
-    html += `<tr><td colspan="${cols.length + 3}" class="muted" style="padding:12px;">No named guests yet. Add them in the Overview tab.</td></tr>`;
+    html += `<tr><td colspan="${cols.length + 3}" class="muted" style="padding:12px;">No adult guests yet. Add them in the Overview tab.</td></tr>`;
   } else {
     people.forEach(pr => {
       // Everything a tag might be looked up by, folded once at render time
@@ -3086,7 +3091,6 @@ function renderNameTags() {
       html += `<tr data-search="${esc(hay)}">
         <td><span style="font-weight:600;">${esc(pr.first)}</span>
           ${pr.full !== pr.first ? `<span class="muted" style="font-size:12px;"> ${esc(pr.full.slice(pr.first.length).trim())}</span>` : ""}
-          ${pr.isKid ? '<span style="margin-left:6px; background:#FBE9EF; color:#C23568; border-radius:10px; padding:1px 7px; font-size:11px; font-weight:600;">kid</span>' : ""}
         </td>
         <td>${seats[pr.key]
           ? `<span class="seat-chip">${esc(seats[pr.key])}</span>`
