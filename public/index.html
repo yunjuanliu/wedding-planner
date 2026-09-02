@@ -5204,6 +5204,48 @@ function fmtMoney(n) {
 // other people. Deliberately not persisted: the whole point is that it is
 // hidden by default, so a stored "shown" would defeat it on the next open.
 let budgetHidden = true;
+
+// A passcode on the budget. Worth being clear about what this is: the code
+// sits in this file and the data is in the same store as everything else,
+// so it stops someone glancing at the laptop, not someone determined.
+// Unlocking lasts for the browser session, so closing the tab re-locks.
+const BUDGET_PASSCODE = "0919";
+let budgetUnlocked = (() => {
+  try { return sessionStorage.getItem("budget-unlocked") === "1"; } catch (e) { return false; }
+})();
+function unlockBudget() {
+  budgetUnlocked = true;
+  try { sessionStorage.setItem("budget-unlocked", "1"); } catch (e) {}
+}
+function budgetLockHtml() {
+  return `<div class="card" style="max-width:360px; margin:48px auto; text-align:center;">
+    <div style="font-size:30px; line-height:1; margin-bottom:8px;">&#128274;</div>
+    <h3 style="margin:0 0 6px;">Budget is locked</h3>
+    <p class="muted" style="font-size:13px; margin:0 0 16px;">Enter the passcode to view the amounts.</p>
+    <input type="password" id="budget-pass" inputmode="numeric" autocomplete="off"
+      maxlength="12" placeholder="Passcode"
+      style="width:150px; text-align:center; letter-spacing:6px; font-size:17px;" />
+    <div id="budget-pass-err" style="display:none; color:#B3253C; font-size:12.5px; font-weight:600; margin-top:8px;">
+      That is not the passcode.</div>
+    <div class="row" style="justify-content:center; margin-top:14px;">
+      <button class="primary" id="budget-unlock">Unlock</button>
+    </div>
+  </div>`;
+}
+function wireBudgetLock(onUnlocked) {
+  const field = document.getElementById("budget-pass");
+  const err = document.getElementById("budget-pass-err");
+  const submit = () => {
+    if (field.value.trim() === BUDGET_PASSCODE) { unlockBudget(); onUnlocked(); return; }
+    err.style.display = "";
+    field.value = "";
+    field.focus();
+  };
+  document.getElementById("budget-unlock").addEventListener("click", submit);
+  field.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); });
+  field.addEventListener("input", () => { err.style.display = "none"; });
+  field.focus();
+}
 function dashMoney(n) { return budgetHidden ? "$•••••" : fmtMoney(n); }
 function progressRing({pct, centerText, centerSub, color, title}) {
   const r = 54, c = 2 * Math.PI * r;
@@ -5224,6 +5266,11 @@ function progressRing({pct, centerText, centerSub, color, title}) {
 }
 function renderBudget() {
   const p = document.getElementById("panel-budget");
+  if (!budgetUnlocked) {
+    p.innerHTML = budgetLockHtml();
+    wireBudgetLock(renderBudget);
+    return;
+  }
   if (!budget.vendors) budget.vendors = [];
   if (!budget.expenses) budget.expenses = [];
   const spent = budgetSpent();
@@ -5734,6 +5781,19 @@ function renderDashboard() {
   const budgetEye = document.getElementById("budget-eye");
   if (budgetEye) {
     budgetEye.addEventListener("click", () => {
+      const reveal = budgetHidden;
+      // Revealing here shows the same figures the budget tab does, so it
+      // asks for the same passcode - otherwise the lock is one click away
+      // from being pointless. Hiding again never asks.
+      if (reveal && !budgetUnlocked) {
+        openInputModal("Budget passcode", "", (code) => {
+          if (code.trim() !== BUDGET_PASSCODE) return;
+          unlockBudget();
+          budgetHidden = false;
+          renderDashboard();
+        }, "password");
+        return;
+      }
       budgetHidden = !budgetHidden;
       renderDashboard();
       const again = document.getElementById("budget-eye");
