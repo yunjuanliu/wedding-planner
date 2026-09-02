@@ -5721,11 +5721,14 @@ function renderDashboard() {
       </div>
       <div class="ring-wrap">
         ${progressRing({
-          pct: total ? pct : 0,
-          centerText: total ? pct + "%" : "—",
+          // Masked, the ring showed the percentage spent and drew the arc to
+          // match - which is budget information, and with a total anyone
+          // knows it gives the amount away. Hidden means hidden.
+          pct: budgetHidden ? 0 : (total ? pct : 0),
+          centerText: budgetHidden ? "•••" : (total ? pct + "%" : "—"),
           centerSub: total ? "of budget" : "no budget",
-          color: remaining < 0 ? "#D9455F" : "var(--primary)",
-          title: "Budget used"
+          color: remaining < 0 && !budgetHidden ? "#D9455F" : "var(--primary)",
+          title: budgetHidden ? "Budget hidden" : "Budget used"
         })}
         <div class="ring-legend">
           <div class="ring-main">${dashMoney(spent)} spent</div>
