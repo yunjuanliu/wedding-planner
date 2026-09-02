@@ -4803,11 +4803,95 @@ let tlJumpId = null;
 let timelineSections = [];
 const TIMELINE_SECTION_DEFAULTS = ["Morning Preparation","Pre-Ceremony","Ceremony","Cocktail Hour","Reception","Evening Highlights"];
 
+// The run sheet the day-of team actually holds: every row says WHEN it
+// happens, WHO is running it, and WHAT the action is. Grouped by section
+// and ordered exactly as the timeline is on screen, so the document and
+// the app never disagree.
+async function exportTimelineDocx() {
+  const {Document, Packer, Paragraph, HeadingLevel, Table, TableRow, TableCell,
+         TextRun, WidthType, AlignmentType, BorderStyle} = docx;
+  const children = [];
+
+  children.push(new Paragraph({text: "Day-of Timeline", heading: HeadingLevel.TITLE}));
+  children.push(new Paragraph({
+    text: WEDDING_DATE.toLocaleDateString(undefined,
+      {weekday: "long", year: "numeric", month: "long", day: "numeric"}),
+    spacing: {after: 240},
+  }));
+
+  const sorted = [...timeline].sort((a, b) => (a.order || 0) - (b.order || 0));
+  const known = timelineSections.map(sec => sec.name);
+  const groups = timelineSections.map(sec => ({
+    name: sec.name,
+    items: sorted.filter(t => (t.section || "") === sec.name),
+  }));
+  const orphan = sorted.filter(t => known.indexOf(t.section || "") === -1);
+  if (orphan.length) groups.push({name: "Unsectioned", items: orphan});
+
+  const cell = (kids, width) => new TableCell({
+    width: {size: width, type: WidthType.PERCENTAGE},
+    margins: {top: 60, bottom: 60, left: 80, right: 80},
+    children: kids,
+  });
+  const head = t => new Paragraph({children: [new TextRun({text: t, bold: true, size: 18})]});
+
+  let any = false;
+  groups.forEach(g => {
+    if (!g.items.length) return;
+    any = true;
+    children.push(new Paragraph({text: g.name, heading: HeadingLevel.HEADING_1, spacing: {before: 240, after: 80}}));
+    const rows = [new TableRow({
+      tableHeader: true,
+      children: [cell([head("WHEN")], 16), cell([head("HOW LONG")], 14),
+                 cell([head("WHO")], 20), cell([head("ACTION")], 50)],
+    })];
+    g.items.forEach(t => {
+      const action = [new Paragraph({children: [new TextRun({text: t.event || "", bold: true})]})];
+      if (t.desc && t.desc.trim()) action.push(new Paragraph({text: t.desc.trim()}));
+      rows.push(new TableRow({children: [
+        cell([new Paragraph({children: [new TextRun({text: t.time || "", bold: true})]})], 16),
+        cell([new Paragraph(t.duration || "\u2014")], 14),
+        // An unassigned row is called out rather than left blank: a blank
+        // cell reads as "nothing needed" instead of "nobody yet".
+        cell([new Paragraph({children: [new TextRun({
+          text: t.assignee || "Unassigned",
+          bold: !!t.assignee,
+          italics: !t.assignee,
+        })]})], 20),
+        cell(action, 50),
+      ]}));
+    });
+    children.push(new Table({width: {size: 100, type: WidthType.PERCENTAGE}, rows}));
+  });
+
+  if (!any) children.push(new Paragraph({text: "No timeline entries yet."}));
+
+  const unassigned = sorted.filter(t => !t.assignee).length;
+  children.push(new Paragraph({
+    text: `${sorted.length} moment${sorted.length === 1 ? "" : "s"}`
+        + (unassigned ? ` \u00b7 ${unassigned} still unassigned` : " \u00b7 all assigned"),
+    spacing: {before: 240},
+  }));
+
+  const doc = new Document({sections: [{children}]});
+  const blob = await Packer.toBlob(doc);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `wedding-timeline-${new Date().toISOString().slice(0, 10)}.docx`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return sorted.length;
+}
+
 function renderTimeline() {
   const p = document.getElementById("panel-timeline");
   const sectionOptions = timelineSections.map(s => `<option value="${s.name}">${s.name}</option>`).join("");
-  let html = `<div class="row" style="margin-bottom:12px;">
+  let html = `<div class="row" style="margin-bottom:12px; justify-content:space-between;">
     <button id="t-add-section">+ Add section</button>
+    <button id="t-export" title="Download the run sheet as a Word document">Download timeline</button>
   </div>
   <div class="add-form">
     <input type="text" id="t-time" placeholder="Time (e.g. 2:00 pm)" style="flex:0 0 130px;" />
@@ -4831,6 +4915,7 @@ function renderTimeline() {
           </select>
           <span data-id="${t.id}" data-action="edit-event" style="flex:2; min-width:150px; cursor:pointer; border-bottom:1px dashed transparent;" title="Click to edit">${t.event}</span>
           <span class="muted" data-id="${t.id}" data-action="edit-duration" style="flex:0 0 90px; cursor:pointer; border-bottom:1px dashed transparent;" title="Click to edit">${t.duration || "+ Duration"}</span>
+          <select data-tl-assign="${t.id}" style="flex:0 0 150px;" title="Who is running this">${assigneeOptionsHtml(t.assignee)}</select>
           <button class="icon-btn tl-fade" data-id="${t.id}" data-action="remove" aria-label="Remove timeline entry">${TRASH_ICON}</button>
         </div>
         <div class="muted" data-id="${t.id}" data-action="edit-desc" style="font-size:13px; margin-top:6px; cursor:pointer; ${t.desc ? "" : "font-style:italic;"}" title="Click to edit">${t.desc || "+ Add description"}</div>
@@ -4861,6 +4946,31 @@ function renderTimeline() {
 
   p.innerHTML = html;
 
+  p.querySelectorAll("[data-tl-assign]").forEach(sel => {
+    sel.addEventListener("change", async (e) => {
+      const item = timeline.find(t => t.id === e.currentTarget.dataset.tlAssign);
+      if (!item) return;
+      // "+ Add new" and "Manage tags" are actions, not values - the shared
+      // handler owns those, and adding or removing a person here changes the
+      // same list the to-do uses.
+      if (handleAssigneeAction(e.currentTarget, item.assignee, async (name) => {
+        item.assignee = name;
+        renderTimeline();
+        await saveKey("wedding-timeline", timeline);
+      })) return;
+      item.assignee = e.currentTarget.value;
+      await saveKey("wedding-timeline", timeline);
+    });
+  });
+
+  document.getElementById("t-export").addEventListener("click", async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true; btn.textContent = "Preparing…";
+    try { await exportTimelineDocx(); btn.textContent = "Downloaded"; }
+    catch (err) { btn.textContent = "Export failed"; console.error(err); }
+    setTimeout(() => { btn.disabled = false; btn.textContent = "Download timeline"; }, 2000);
+  });
+
   document.getElementById("t-add-section").addEventListener("click", () => {
     openInputModal("Section name", "", (name) => {
       const trimmed = name.trim();
@@ -4887,7 +4997,7 @@ function renderTimeline() {
     const event = document.getElementById("t-event").value.trim();
     const section = document.getElementById("t-section").value;
     if (!event) return;
-    timeline.push({id:uid(), time, event, duration:"", desc:"", section, order: timeline.length});
+    timeline.push({id:uid(), time, event, duration:"", desc:"", assignee:"", section, order: timeline.length});
     renderTimeline();
     saveKey("wedding-timeline", timeline);
   });
