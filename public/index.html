@@ -5399,6 +5399,18 @@ function renderBudget() {
   const pct = budget.total ? Math.min(100, Math.round(spent / budget.total * 100)) : 0;
   let html = `
   <div class="row" style="gap:14px; align-items:stretch; margin-bottom:16px; flex-wrap:wrap;">
+  <button id="b-gifts" style="flex:1; min-width:220px; text-align:left; border:none; cursor:pointer; padding:0; font-family:inherit;">
+    <div class="hero-banner" style="height:100%; padding:18px 20px; display:flex; flex-direction:column; justify-content:center; gap:10px; box-sizing:border-box;">
+      <div style="position:relative; z-index:1;">
+        <div style="font-size:16px; font-weight:700; color:#fff;">Wedding gifts &rarr;</div>
+        <div style="font-size:13px; color:rgba(255,255,255,0.85); margin-top:2px;">
+          ${gt.cash || gt.gift
+            ? `${fmtMoney(gt.money)} received \u00b7 ${gt.households - gt.blank} of ${gt.households} recorded`
+            : "Nothing recorded yet \u2014 tap to start"}
+        </div>
+      </div>
+    </div>
+  </button>
   <div class="card" style="flex:1; min-width:260px; margin-bottom:0; box-sizing:border-box;">
     <div class="row" style="justify-content:space-between; margin-bottom:10px;">
       <span class="section-title" style="margin:0;">Total budget</span>
@@ -5414,18 +5426,6 @@ function renderBudget() {
       <span class="muted">+ Other expenses ${fmtMoney(expenseTotal)}</span>
     </div>
   </div>
-  <button id="b-gifts" style="flex:1; min-width:220px; text-align:left; border:none; cursor:pointer; padding:0; font-family:inherit;">
-    <div class="hero-banner" style="height:100%; padding:18px 20px; display:flex; flex-direction:column; justify-content:center; gap:10px; box-sizing:border-box;">
-      <div style="position:relative; z-index:1;">
-        <div style="font-size:16px; font-weight:700; color:#fff;">Wedding gifts &rarr;</div>
-        <div style="font-size:13px; color:rgba(255,255,255,0.85); margin-top:2px;">
-          ${gt.cash || gt.gift
-            ? `${fmtMoney(gt.money)} received \u00b7 ${gt.households - gt.blank} of ${gt.households} recorded`
-            : "Nothing recorded yet \u2014 tap to start"}
-        </div>
-      </div>
-    </div>
-  </button>
   </div>
   <div class="row" style="justify-content:space-between; margin-bottom:10px;">
     <span class="section-title" style="margin:0;">Vendors <span class="muted" style="font-weight:500;">(${budget.vendors.length})</span></span>
