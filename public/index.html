@@ -775,6 +775,7 @@
   <div id="panel-dashboard" class="panel active"></div>
   <div id="panel-todo" class="panel"></div>
   <div id="panel-shoplist" class="panel"></div>
+  <div id="panel-gifts" class="panel"></div>
   <div id="panel-guests" class="panel"></div>
   <div id="panel-budget" class="panel"></div>
   <div id="panel-activities" class="panel"></div>
@@ -883,16 +884,6 @@
         <tbody id="table-summary-body"></tbody>
       </table>
     </div>
-  </div>
-</div>
-
-<div class="modal-overlay" id="gifts-modal">
-  <div class="modal-box wide-10">
-    <div class="row" style="justify-content:space-between; align-items:center; margin-bottom:4px;">
-      <h3 style="margin:0;">Wedding gifts</h3>
-      <button class="icon-btn" id="gifts-close" aria-label="Close" title="Close">&#10005;</button>
-    </div>
-    <div id="gifts-body"></div>
   </div>
 </div>
 
@@ -1478,6 +1469,7 @@ function goToTab(name) {
   document.getElementById("panel-" + name).classList.add("active");
   if (name === "dashboard") renderDashboard();
   if (name === "shoplist") renderShopList();
+  if (name === "gifts") renderGiftsPage();
 }
 
 document.querySelectorAll(".tab").forEach(t => {
@@ -5326,7 +5318,7 @@ function giftsPageHtml() {
     <div class="add-form" style="margin-top:10px;">
       <input type="text" id="gift-search" placeholder="Search households" value="${esc(giftSearch)}" style="flex:1; min-width:150px;" />
     </div>
-    <div class="table-wrap" style="margin-top:4px; max-height:56vh; overflow-y:auto;">
+    <div class="table-wrap" style="margin-top:4px;">
       <table class="data-table" style="min-width:0;">
         <thead><tr>
           <th>Household</th>
@@ -5344,8 +5336,23 @@ function giftsPageHtml() {
 }
 
 function renderGiftsPage() {
-  const box = document.getElementById("gifts-body");
-  box.innerHTML = giftsPageHtml();
+  const p = document.getElementById("panel-gifts");
+  // Reachable only from the budget banner in practice, but it shows the same
+  // private figures, so it asks on its own account rather than trusting that.
+  if (!budgetUnlocked) {
+    p.innerHTML = budgetLockHtml();
+    wireBudgetLock(renderGiftsPage);
+    return;
+  }
+  p.innerHTML = `
+  <div class="row" style="justify-content:space-between; margin-bottom:14px;">
+    <button id="back-to-budget-btn" style="display:inline-flex; align-items:center; gap:6px;">&larr; Back to Budget</button>
+  </div>
+  <p class="section-title" style="margin:0 0 10px;">Wedding gifts</p>
+  ` + giftsPageHtml();
+
+  document.getElementById("back-to-budget-btn").addEventListener("click", () => goToTab("budget"));
+
   const search = document.getElementById("gift-search");
   search.addEventListener("input", (e) => {
     const pos = e.target.selectionStart;
@@ -5354,7 +5361,7 @@ function renderGiftsPage() {
     const again = document.getElementById("gift-search");
     if (again) { again.focus(); again.setSelectionRange(pos, pos); }
   });
-  box.querySelectorAll("[data-gift]").forEach(inp => {
+  p.querySelectorAll("[data-gift]").forEach(inp => {
     // Saved on blur, not per keystroke: re-rendering to update the total
     // mid-word would move the caret out from under the cursor.
     inp.addEventListener("change", async (e) => {
@@ -5364,20 +5371,9 @@ function renderGiftsPage() {
       if (v) budget.gifts[id] = v; else delete budget.gifts[id];
       await saveKey("wedding-budget", budget);
       renderGiftsPage();
-      renderBudget();          // the button's subtitle tracks the total
     });
   });
 }
-function openGiftsModal() {
-  renderGiftsPage();
-  document.getElementById("gifts-modal").classList.add("open");
-}
-document.getElementById("gifts-close").addEventListener("click", () => {
-  document.getElementById("gifts-modal").classList.remove("open");
-});
-document.getElementById("gifts-modal").addEventListener("click", (e) => {
-  if (e.target.id === "gifts-modal") document.getElementById("gifts-modal").classList.remove("open");
-});
 
 function renderBudget() {
   const p = document.getElementById("panel-budget");
@@ -5481,7 +5477,7 @@ function renderBudget() {
 `;
   p.innerHTML = html;
 
-  document.getElementById("b-gifts").addEventListener("click", openGiftsModal);
+  document.getElementById("b-gifts").addEventListener("click", () => goToTab("gifts"));
 
   const body = document.getElementById("v-body");
   const yes = v => /^(yes|paid in full)$/i.test((v || "").trim());
