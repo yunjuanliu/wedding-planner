@@ -5204,6 +5204,7 @@ function fmtMoney(n) {
 // other people. Deliberately not persisted: the whole point is that it is
 // hidden by default, so a stored "shown" would defeat it on the next open.
 let budgetHidden = true;
+let giftSearch = "";
 
 // A passcode on the budget. Worth being clear about what this is: the code
 // sits in this file and the data is in the same store as everything else,
@@ -5264,6 +5265,31 @@ function progressRing({pct, centerText, centerSub, color, title}) {
     </div>
   </div>`;
 }
+// What a household gave. One field takes either an amount or a word, so
+// "500" and "Gift" can be typed in the same place. Anything that is not a
+// number is kept verbatim and counted separately - a teapot is not zero
+// dollars, and averaging it into the money would be wrong.
+function parseGift(raw) {
+  const v = (raw || "").trim();
+  if (!v) return {kind: "none", amount: 0, text: ""};
+  const n = Number(v.replace(/[$,\s]/g, ""));
+  if (v !== "" && isFinite(n) && /\d/.test(v) && !/[a-z]/i.test(v.replace(/[$,\s]/g, ""))) {
+    return {kind: "money", amount: n, text: v};
+  }
+  return {kind: "gift", amount: 0, text: v};
+}
+
+function giftTotals() {
+  let money = 0, cash = 0, gift = 0, blank = 0;
+  guests.forEach(g => {
+    const r = parseGift((budget.gifts || {})[g.id]);
+    if (r.kind === "money") { money += r.amount; cash++; }
+    else if (r.kind === "gift") gift++;
+    else blank++;
+  });
+  return {money, cash, gift, blank, households: guests.length};
+}
+
 function renderBudget() {
   const p = document.getElementById("panel-budget");
   if (!budgetUnlocked) {
@@ -5273,6 +5299,25 @@ function renderBudget() {
   }
   if (!budget.vendors) budget.vendors = [];
   if (!budget.expenses) budget.expenses = [];
+  // Kept inside the budget blob rather than a key of its own, so what each
+  // family gave is covered by the same passcode as everything else here.
+  if (!budget.gifts) budget.gifts = {};
+  const gt = giftTotals();
+  const gq = giftSearch.trim().toLowerCase();
+  const giftRows = [...guests]
+    .filter(g => (g.name || "").trim())
+    .sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()))
+    .filter(g => !gq || g.name.toLowerCase().includes(gq))
+    .map(g => {
+      const r = parseGift(budget.gifts[g.id]);
+      return `<tr>
+        <td>${esc(g.name)}</td>
+        <td style="text-align:right;" class="muted">${Number(g.partySize) || 0}</td>
+        <td><input type="text" data-gift="${g.id}" value="${esc(budget.gifts[g.id] || "")}"
+              placeholder="0 or Gift" style="width:100%;"
+              ${r.kind === "gift" ? 'title="Counted as a gift, not money"' : ""} /></td>
+      </tr>`;
+    }).join("");
   const spent = budgetSpent();
   const vendorTotal = budget.vendors.reduce((s, r) => s + (Number(r.amount) || 0), 0);
   const expenseTotal = budget.expenses.reduce((s, r) => s + (Number(r.amount) || 0), 0);
@@ -5344,8 +5389,57 @@ function renderBudget() {
       <span style="font-size:18px; font-weight:700; color:${remaining < 0 ? "#D9455F" : "var(--primary)"};">${fmtMoney(spent)}</span>
     </div>
     <div class="muted" style="margin-top:4px;">Vendors ${fmtMoney(vendorTotal)} + Other expenses ${fmtMoney(expenseTotal)}${budget.total ? " · of " + fmtMoney(budget.total) + " budget" : ""}</div>
+  </div>
+  <div class="card" style="margin-top:14px;">
+    <div class="row" style="justify-content:space-between; align-items:baseline;">
+      <span class="section-title" style="margin:0;">Wedding gifts <span class="muted" style="font-weight:400; font-size:13px;">(${gt.households} households)</span></span>
+      <span style="font-size:18px; font-weight:700; color:var(--primary);">${fmtMoney(gt.money)}</span>
+    </div>
+    <div class="muted" style="margin-top:4px;">
+      ${gt.cash} gave money &middot; ${gt.gift} gave a gift &middot; ${gt.blank} not recorded yet
+    </div>
+    <div class="add-form" style="margin-top:10px;">
+      <input type="text" id="gift-search" placeholder="Search households" value="${esc(giftSearch)}" style="flex:1; min-width:150px;" />
+    </div>
+    <div class="table-wrap" style="margin-top:4px;">
+      <table class="data-table" style="min-width:0;">
+        <thead><tr>
+          <th>Household</th>
+          <th style="width:74px; text-align:right;">Guests</th>
+          <th style="width:150px;">Amount or gift</th>
+        </tr></thead>
+        <tbody id="gift-body">${giftRows || `<tr><td colspan="3" class="muted" style="padding:12px;">No household matches your search.</td></tr>`}</tbody>
+        <tfoot><tr>
+          <td style="font-weight:600;">Total received</td>
+          <td></td>
+          <td style="font-weight:700; color:var(--primary);">${fmtMoney(gt.money)}</td>
+        </tr></tfoot>
+      </table>
+    </div>
   </div>`;
   p.innerHTML = html;
+
+  const giftSearchEl = document.getElementById("gift-search");
+  if (giftSearchEl) {
+    giftSearchEl.addEventListener("input", (e) => {
+      const pos = e.target.selectionStart;
+      giftSearch = e.target.value;
+      renderBudget();
+      const again = document.getElementById("gift-search");
+      if (again) { again.focus(); again.setSelectionRange(pos, pos); }
+    });
+  }
+  p.querySelectorAll("[data-gift]").forEach(inp => {
+    // Saved on blur, not per keystroke: re-rendering as you type would
+    // recompute the total under the cursor and fight the caret.
+    inp.addEventListener("change", async (e) => {
+      const id = e.currentTarget.dataset.gift;
+      const v = e.currentTarget.value.trim();
+      if (v) budget.gifts[id] = v; else delete budget.gifts[id];
+      await saveKey("wedding-budget", budget);
+      renderBudget();
+    });
+  });
 
   const body = document.getElementById("v-body");
   const yes = v => /^(yes|paid in full)$/i.test((v || "").trim());
