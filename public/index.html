@@ -5281,42 +5281,63 @@ function parseGift(raw) {
   return {kind: "gift", amount: 0, text: v};
 }
 
+// Someone who sent a gift but is not on the guest list - a colleague, a
+// relative who could not travel. Held in the budget blob rather than added
+// to `guests` on purpose: putting them there would raise the headcount,
+// seat them on the plan and print them a name tag.
+function giftPeople() {
+  const fromGuests = guests
+    .filter(g => (g.name || "").trim())
+    .map(g => ({id: g.id, name: g.name, size: Number(g.partySize) || 0, extra: false}));
+  const extras = (budget.giftExtras || [])
+    .map(e => ({id: e.id, name: e.name, size: null, extra: true}));
+  return fromGuests.concat(extras)
+    .sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
+}
+
 function giftTotals() {
   let money = 0, cash = 0, gift = 0, blank = 0;
-  guests.forEach(g => {
+  const people = giftPeople();
+  people.forEach(g => {
     const r = parseGift((budget.gifts || {})[g.id]);
     if (r.kind === "money") { money += r.amount; cash++; }
     else if (r.kind === "gift") gift++;
     else blank++;
   });
-  return {money, cash, gift, blank, households: guests.length};
+  return {money, cash, gift, blank, households: people.length,
+          extras: people.filter(g => g.extra).length};
 }
 
 function giftsPageHtml() {
   const gt = giftTotals();
   const gq = giftSearch.trim().toLowerCase();
-  const rows = [...guests]
-    .filter(g => (g.name || "").trim())
-    .sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()))
+  const rows = giftPeople()
     .filter(g => !gq || g.name.toLowerCase().includes(gq))
     .map(g => {
       const r = parseGift((budget.gifts || {})[g.id]);
       return `<tr>
-        <td>${esc(g.name)}</td>
-        <td style="text-align:right;" class="muted">${Number(g.partySize) || 0}</td>
+        <td>${esc(g.name)}${g.extra ? ' <span class="muted" style="font-size:11px; background:var(--surface-1); border-radius:9px; padding:1px 7px;">not a guest</span>' : ""}</td>
+        <td style="text-align:right;" class="muted">${g.extra ? "&mdash;" : g.size}</td>
         <td><input type="text" data-gift="${g.id}" value="${esc((budget.gifts || {})[g.id] || "")}"
               placeholder="0 or Gift" style="width:100%;"
               ${r.kind === "gift" ? 'title="Counted as a gift, not money"' : ""} /></td>
+        <td style="width:36px; text-align:right;">${g.extra
+          ? `<button class="icon-btn" data-gift-remove="${g.id}" aria-label="Remove ${esc(g.name)}" title="Remove">${TRASH_ICON}</button>`
+          : ""}</td>
       </tr>`;
     }).join("");
   return `<div class="row" style="justify-content:space-between; align-items:baseline;">
       <span class="muted" style="font-size:13px;">
-        ${gt.cash} gave money &middot; ${gt.gift} gave a gift &middot; ${gt.blank} of ${gt.households} not recorded yet
+        ${gt.cash} gave money &middot; ${gt.gift} gave a gift &middot; ${gt.blank} of ${gt.households} not recorded yet${gt.extras ? ` &middot; ${gt.extras} added` : ""}
       </span>
       <span style="font-size:20px; font-weight:700; color:var(--primary);">${fmtMoney(gt.money)}</span>
     </div>
     <div class="add-form" style="margin-top:10px;">
-      <input type="text" id="gift-search" placeholder="Search households" value="${esc(giftSearch)}" style="flex:1; min-width:150px;" />
+      <input type="text" id="gift-search" placeholder="Search" value="${esc(giftSearch)}" style="flex:1; min-width:150px;" />
+    </div>
+    <div class="add-form">
+      <input type="text" id="gift-new-name" placeholder="Add someone who is not on the guest list" style="flex:1; min-width:200px;" />
+      <button class="primary" id="gift-add">Add</button>
     </div>
     <div class="table-wrap" style="margin-top:4px;">
       <table class="data-table" style="min-width:0;">
@@ -5324,12 +5345,14 @@ function giftsPageHtml() {
           <th>Household</th>
           <th style="width:74px; text-align:right;">Guests</th>
           <th style="width:150px;">Amount or gift</th>
+          <th style="width:36px;"></th>
         </tr></thead>
-        <tbody>${rows || `<tr><td colspan="3" class="muted" style="padding:12px;">No household matches your search.</td></tr>`}</tbody>
+        <tbody>${rows || `<tr><td colspan="4" class="muted" style="padding:12px;">Nobody matches your search.</td></tr>`}</tbody>
         <tfoot><tr>
           <td style="font-weight:600;">Total received</td>
           <td></td>
           <td style="font-weight:700; color:var(--primary);">${fmtMoney(gt.money)}</td>
+          <td></td>
         </tr></tfoot>
       </table>
     </div>`;
@@ -5352,6 +5375,31 @@ function renderGiftsPage() {
   ` + giftsPageHtml();
 
   document.getElementById("back-to-budget-btn").addEventListener("click", () => goToTab("budget"));
+
+  const addName = document.getElementById("gift-new-name");
+  const addPerson = async () => {
+    const name = addName.value.trim();
+    if (!name) return;
+    if (!budget.giftExtras) budget.giftExtras = [];
+    budget.giftExtras.push({id: uid(), name});
+    addName.value = "";
+    await saveKey("wedding-budget", budget);
+    renderGiftsPage();
+  };
+  document.getElementById("gift-add").addEventListener("click", addPerson);
+  addName.addEventListener("keydown", (e) => { if (e.key === "Enter") addPerson(); });
+
+  p.querySelectorAll("[data-gift-remove]").forEach(btn => {
+    btn.addEventListener("click", async (e) => {
+      const id = e.currentTarget.dataset.giftRemove;
+      // the person and what they gave go together - leaving the amount
+      // behind would keep counting toward the total with nothing to show it
+      budget.giftExtras = (budget.giftExtras || []).filter(x => x.id !== id);
+      if (budget.gifts) delete budget.gifts[id];
+      await saveKey("wedding-budget", budget);
+      renderGiftsPage();
+    });
+  });
 
   const search = document.getElementById("gift-search");
   search.addEventListener("input", (e) => {
