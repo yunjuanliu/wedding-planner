@@ -4791,7 +4791,7 @@ const TIME_OPTIONS = buildTimeOptions();
 // a time nothing on a wedding day happens at. Start the day instead.
 const DEFAULT_MOMENT_TIME = "8:00 am";
 function timeToMinutes(t) {
-  const m = (t || "").match(/(\d+):(\d+)\s*(am|pm)/i);
+  const m = (t || "").match(/(\d+)\s*:\s*(\d+)\s*(am|pm)/i);
   if (!m) return 0;
   let [, h, min, ap] = m;
   h = parseInt(h); min = parseInt(min);
@@ -4799,8 +4799,24 @@ function timeToMinutes(t) {
   else { if (h !== 12) h += 12; }
   return h * 60 + min;
 }
+// Map whatever is stored onto one of the dropdown's own values. A time
+// typed by hand - "4: 50 PM", "4:50PM" - is the same moment but matches no
+// option, and an option list with nothing selected shows its first entry:
+// 12:00 am. Snapped to the nearest five minutes, since that is all the
+// list holds.
+function normaliseTime(raw) {
+  const v = (raw || "").trim();
+  if (!v) return "";
+  if (TIME_OPTIONS.indexOf(v) !== -1) return v;
+  if (!/(\d+)\s*:\s*(\d+)\s*(am|pm)/i.test(v)) return "";
+  const mins = Math.round(timeToMinutes(v) / 5) * 5 % (24 * 60);
+  const h = Math.floor(mins / 60), m = mins % 60;
+  const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+  return `${h12}:${String(m).padStart(2, "0")} ${h < 12 ? "am" : "pm"}`;
+}
 function timeSelectOptions(sel) {
-  return TIME_OPTIONS.map(t => `<option value="${t}" ${t===sel?"selected":""}>${t}</option>`).join("");
+  const pick = normaliseTime(sel) || DEFAULT_MOMENT_TIME;
+  return TIME_OPTIONS.map(t => `<option value="${t}" ${t===pick?"selected":""}>${t}</option>`).join("");
 }
 
 let tlDragId = null;
@@ -4854,7 +4870,7 @@ async function exportTimelineDocx() {
       const action = [new Paragraph({children: [new TextRun({text: t.event || "", bold: true})]})];
       if (t.desc && t.desc.trim()) action.push(new Paragraph({text: t.desc.trim()}));
       rows.push(new TableRow({children: [
-        cell([new Paragraph({children: [new TextRun({text: t.time || "", bold: true})]})], 16),
+        cell([new Paragraph({children: [new TextRun({text: normaliseTime(t.time) || t.time || "", bold: true})]})], 16),
         cell([new Paragraph(t.duration || "\u2014")], 14),
         // An unassigned row is called out rather than left blank: a blank
         // cell reads as "nothing needed" instead of "nobody yet".
