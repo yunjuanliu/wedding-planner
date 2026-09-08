@@ -4787,6 +4787,9 @@ function buildTimeOptions() {
   return opts;
 }
 const TIME_OPTIONS = buildTimeOptions();
+// The options run from midnight, so an unset dropdown lands on 12:00 am -
+// a time nothing on a wedding day happens at. Start the day instead.
+const DEFAULT_MOMENT_TIME = "8:00 am";
 function timeToMinutes(t) {
   const m = (t || "").match(/(\d+):(\d+)\s*(am|pm)/i);
   if (!m) return 0;
@@ -4896,7 +4899,7 @@ function renderTimeline() {
     <button id="t-export" title="Download the run sheet as a Word document">Download timeline</button>
   </div>
   <div class="add-form">
-    <input type="text" id="t-time" placeholder="Time (e.g. 2:00 pm)" style="flex:0 0 130px;" />
+    <select id="t-time" style="flex:0 0 130px;">${timeSelectOptions(DEFAULT_MOMENT_TIME)}</select>
     <input type="text" id="t-event" placeholder="Event" style="flex:2; min-width:140px;" />
     <select id="t-section" style="flex:0 0 160px;">
       <option value="">No section</option>
