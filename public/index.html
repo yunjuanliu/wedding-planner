@@ -379,6 +379,19 @@
   .svc-kcombo + .svc-kcombo::before { content: " · "; color: #aaa; white-space: normal; }
   .svc-kcombo b { font-variant-numeric: tabular-nums; }
   .svc-ktotal td { border-top: 1.5pt solid #1D1B29; font-weight: 700; }
+  .tl-who { flex: 0 0 190px; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+  .tl-who select { flex: 1 1 auto; min-width: 88px; }
+  .tl-chip {
+    display: inline-flex; align-items: center; gap: 3px;
+    background: var(--primary-light); color: var(--primary);
+    border-radius: 10px; padding: 2px 4px 2px 8px;
+    font-size: 12px; font-weight: 600; white-space: nowrap;
+  }
+  .tl-chip button {
+    border: none; background: none; color: inherit; cursor: pointer;
+    font-size: 14px; line-height: 1; padding: 0 3px; min-height: 0; opacity: 0.65;
+  }
+  .tl-chip button:hover { opacity: 1; }
   .seat-zoom { display: inline-flex; align-items: center; gap: 2px; }
   .seat-zoom button { min-width: 28px; padding: 4px 6px; font-weight: 700; }
   .seat-zoom button:disabled { opacity: 0.4; cursor: default; }
@@ -1058,6 +1071,10 @@ function renameTagReferences(oldName, newName) {
     shopList.forEach(r => { if (r.store === oldName) r.store = newName; });
   } else {
     todoData.forEach(s => s.items.forEach(i => { if (i.assignee === oldName) i.assignee = newName; }));
+    timeline.forEach(t => {
+      const who = momentAssignees(t);
+      if (who.indexOf(oldName) !== -1) setMomentAssignees(t, who.map(n => n === oldName ? newName : n));
+    });
   }
 }
 function clearTagReferences(name) {
@@ -1065,6 +1082,10 @@ function clearTagReferences(name) {
     shopList.forEach(r => { if (r.store === name) r.store = ""; });
   } else {
     todoData.forEach(s => s.items.forEach(i => { if (i.assignee === name) i.assignee = ""; }));
+    timeline.forEach(t => {
+      const who = momentAssignees(t);
+      if (who.indexOf(name) !== -1) setMomentAssignees(t, who.filter(n => n !== name));
+    });
   }
 }
 function renderTagsModalList() {
@@ -4819,6 +4840,19 @@ function timeSelectOptions(sel) {
   return TIME_OPTIONS.map(t => `<option value="${t}" ${t===pick?"selected":""}>${t}</option>`).join("");
 }
 
+// A moment used to hold one name in `assignee`. It now holds a list in
+// `assignees`, and both shapes are read - existing entries are migrated
+// only when that moment is next edited, rather than rewriting the whole
+// timeline on load.
+function momentAssignees(t) {
+  if (Array.isArray(t.assignees)) return t.assignees.filter(Boolean);
+  return t.assignee ? [t.assignee] : [];
+}
+function setMomentAssignees(t, list) {
+  t.assignees = list.filter(Boolean);
+  delete t.assignee;
+}
+
 let tlDragId = null;
 let tlJumpId = null;
 let timelineSections = [];
@@ -4875,9 +4909,9 @@ async function exportTimelineDocx() {
         // An unassigned row is called out rather than left blank: a blank
         // cell reads as "nothing needed" instead of "nobody yet".
         cell([new Paragraph({children: [new TextRun({
-          text: t.assignee || "Unassigned",
-          bold: !!t.assignee,
-          italics: !t.assignee,
+          text: momentAssignees(t).join(", ") || "Unassigned",
+          bold: momentAssignees(t).length > 0,
+          italics: momentAssignees(t).length === 0,
         })]})], 20),
         cell(action, 50),
       ]}));
@@ -4887,7 +4921,7 @@ async function exportTimelineDocx() {
 
   if (!any) children.push(new Paragraph({text: "No timeline entries yet."}));
 
-  const unassigned = sorted.filter(t => !t.assignee).length;
+  const unassigned = sorted.filter(t => momentAssignees(t).length === 0).length;
   children.push(new Paragraph({
     text: `${sorted.length} moment${sorted.length === 1 ? "" : "s"}`
         + (unassigned ? ` \u00b7 ${unassigned} still unassigned` : " \u00b7 all assigned"),
@@ -4936,7 +4970,19 @@ function renderTimeline() {
           </select>
           <span data-id="${t.id}" data-action="edit-event" style="flex:2; min-width:150px; cursor:pointer; border-bottom:1px dashed transparent;" title="Click to edit">${t.event}</span>
           <span class="muted" data-id="${t.id}" data-action="edit-duration" style="flex:0 0 90px; cursor:pointer; border-bottom:1px dashed transparent;" title="Click to edit">${t.duration || "+ Duration"}</span>
-          <select data-tl-assign="${t.id}" style="flex:0 0 150px;" title="Who is running this">${assigneeOptionsHtml(t.assignee)}</select>
+          ${(() => {
+            const who = momentAssignees(t);
+            const free = helperTags.filter(h => who.indexOf(h.name) === -1);
+            return `<span class="tl-who">
+              ${who.map(n => `<span class="tl-chip">${esc(n)}<button data-tl-unassign="${t.id}"
+                  data-name="${esc(n)}" aria-label="Remove ${esc(n)}" title="Remove">&times;</button></span>`).join("")}
+              <select data-tl-assign="${t.id}" title="Add someone to this moment">
+                <option value="">${who.length ? "+ Add" : "Unassigned"}</option>
+                ${free.map(h => `<option value="${esc(h.name)}">${esc(h.name)}</option>`).join("")}
+                <option value="__add_new__">+ Add new&hellip;</option>
+                <option value="__manage__">&#9998; Manage tags&hellip;</option>
+              </select></span>`;
+          })()}
           <button class="icon-btn tl-fade" data-id="${t.id}" data-action="remove" aria-label="Remove timeline entry">${TRASH_ICON}</button>
         </div>
         <div class="muted" data-id="${t.id}" data-action="edit-desc" style="font-size:13px; margin-top:6px; cursor:pointer; ${t.desc ? "" : "font-style:italic;"}" title="Click to edit">${t.desc || "+ Add description"}</div>
@@ -4972,14 +5018,26 @@ function renderTimeline() {
       const item = timeline.find(t => t.id === e.currentTarget.dataset.tlAssign);
       if (!item) return;
       // "+ Add new" and "Manage tags" are actions, not values - the shared
-      // handler owns those, and adding or removing a person here changes the
-      // same list the to-do uses.
-      if (handleAssigneeAction(e.currentTarget, item.assignee, async (name) => {
-        item.assignee = name;
+      // handler owns those, and the list it edits is the to-do's list too.
+      if (handleAssigneeAction(e.currentTarget, "", async (name) => {
+        setMomentAssignees(item, momentAssignees(item).concat([name]));
         renderTimeline();
         await saveKey("wedding-timeline", timeline);
       })) return;
-      item.assignee = e.currentTarget.value;
+      const name = e.currentTarget.value;
+      if (!name) return;
+      const who = momentAssignees(item);
+      if (who.indexOf(name) === -1) setMomentAssignees(item, who.concat([name]));
+      renderTimeline();
+      await saveKey("wedding-timeline", timeline);
+    });
+  });
+  p.querySelectorAll("[data-tl-unassign]").forEach(btn => {
+    btn.addEventListener("click", async (e) => {
+      const item = timeline.find(t => t.id === e.currentTarget.dataset.tlUnassign);
+      if (!item) return;
+      setMomentAssignees(item, momentAssignees(item).filter(n => n !== e.currentTarget.dataset.name));
+      renderTimeline();
       await saveKey("wedding-timeline", timeline);
     });
   });
