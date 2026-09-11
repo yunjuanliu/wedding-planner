@@ -928,7 +928,23 @@
     <textarea id="dish-modal-desc" rows="4" style="width:100%; margin-bottom:12px; resize:vertical;"></textarea>
     <label class="field-label">Assignee</label>
     <div id="dish-modal-who" class="tl-who" style="flex:none; margin-bottom:16px;"></div>
-    <div class="modal-actions">
+    <div style="border-top:1px solid var(--border); padding-top:14px;">
+      <label style="display:flex; align-items:center; gap:10px; cursor:pointer; font-weight:600; font-size:14px;">
+        <span class="switch">
+          <input type="checkbox" id="dish-modal-shop-toggle" />
+          <span class="switch-track"></span>
+        </span>
+        <span id="dish-modal-shop-label">Add items to shop list</span>
+      </label>
+      <div id="dish-modal-shop-fields" style="display:none; margin-top:12px;">
+        <div class="row" style="font-size:11px; text-transform:uppercase; letter-spacing:0.3px; color:var(--ink-soft); padding:0 0 4px;">
+          <span style="flex:1;">Item</span><span style="flex:0 0 60px;">Qty</span><span style="flex:0 0 120px;">Store</span><span style="flex:0 0 28px;"></span>
+        </div>
+        <div id="dish-modal-shop-items"></div>
+        <div id="dish-modal-shop-add-row" style="margin-top:8px;"></div>
+      </div>
+    </div>
+    <div class="modal-actions" style="margin-top:16px;">
       <button id="dish-modal-cancel">Cancel</button>
       <button class="primary" id="dish-modal-save">Save</button>
     </div>
@@ -1267,6 +1283,7 @@ function showTaskEditForm(item) {
   }
 
   const linkedIds = getShopItemIds(item);
+  shopHost = TASK_SHOP_HOST;
   const shopToggle = document.getElementById("task-modal-shop-toggle");
   const shopFields = document.getElementById("task-modal-shop-fields");
   shopToggle.checked = linkedIds.length > 0;
@@ -1283,9 +1300,23 @@ function getShopItemIds(item) {
 }
 
 let shopItemEditingId = null;
+// The shop-item editor was built into the task dialog. The dish dialog
+// needs the identical control, so the four functions below no longer reach
+// for the task directly: they ask the host, which says whose items these
+// are, where to draw them, which store key to save, and what category the
+// Shop List should file them under.
+const TASK_SHOP_HOST = {
+  getItem: () => getEditingItem(),
+  save: () => saveKey("wedding-todo-items", todoData),
+  category: () => "",
+  itemsEl: "task-modal-shop-items",
+  addRowEl: "task-modal-shop-add-row",
+};
+let shopHost = TASK_SHOP_HOST;
+
 function renderShopItemsTable() {
-  const item = getEditingItem();
-  const wrap = document.getElementById("task-modal-shop-items");
+  const item = shopHost.getItem();
+  const wrap = document.getElementById(shopHost.itemsEl);
   if (!item || !wrap) return;
   const ids = getShopItemIds(item);
   const rows = ids.map(id => shopList.find(r => r.id === id)).filter(Boolean);
@@ -1356,27 +1387,27 @@ function renderShopItemsTable() {
 function addShopItemFromModal(name, qty, store, notes) {
   const trimmed = name.trim();
   if (!trimmed) return;
-  const item = getEditingItem();
+  const item = shopHost.getItem();
   if (!item) return;
-  const newRow = { id: uid(), category: "", item: trimmed, qtyNeeded: qty || 1, store: store || "", notes: (notes || "").trim() };
+  const newRow = { id: uid(), category: shopHost.category(), item: trimmed, qtyNeeded: qty || 1, store: store || "", notes: (notes || "").trim() };
   shopList.push(newRow);
   const ids = getShopItemIds(item);
   ids.push(newRow.id);
   item.shopItemIds = ids;
   delete item.shopItemId;
   saveKey("wedding-shop-list", shopList);
-  saveKey("wedding-todo-items", todoData);
+  shopHost.save();
   renderShopItemsTable();
   renderShopList();
 }
 
 function removeShopItem(id) {
-  const item = getEditingItem();
+  const item = shopHost.getItem();
   shopList = shopList.filter(r => r.id !== id);
   if (item) {
     item.shopItemIds = getShopItemIds(item).filter(x => x !== id);
     delete item.shopItemId;
-    saveKey("wedding-todo-items", todoData);
+    shopHost.save();
   }
   saveKey("wedding-shop-list", shopList);
   renderShopItemsTable();
@@ -1385,7 +1416,7 @@ function removeShopItem(id) {
 
 let shopAddOpen = false;
 function renderShopAddRow() {
-  const wrap = document.getElementById("task-modal-shop-add-row");
+  const wrap = document.getElementById(shopHost.addRowEl);
   if (!wrap) return;
   if (!shopAddOpen) {
     wrap.innerHTML = `<button class="link-btn" id="shop-add-trigger">+ Add Shop List</button>`;
@@ -5161,6 +5192,7 @@ function renderFood() {
                 <td data-dish-open="${d.id}" style="cursor:pointer;">
                   <span class="task-text" style="font-weight:600;">${esc(d.name)}</span>${d.detail ? ` <span class="muted" style="font-style:italic; font-size:12px;">${esc(d.detail)}</span>` : ""}
                   ${d.desc ? `<div class="muted" style="font-size:12.5px; margin-top:2px; line-height:1.35;">${esc(d.desc)}</div>` : ""}
+                  ${(() => { const n = getShopItemIds(d).length; return n ? `<div class="muted" style="font-size:11.5px; margin-top:3px;">&#128722; ${n} on the shop list</div>` : ""; })()}
                 </td>
                 <td><span class="tl-who" style="flex:none;">${whoPickerHtml(d.assignees || [], "dish", d.id)}</span></td>
                 <td style="text-align:right;"><button class="icon-btn" data-dish-remove="${d.id}" aria-label="Remove ${esc(d.name)}" title="Remove">${TRASH_ICON}</button></td>
@@ -5232,6 +5264,18 @@ function renderFood() {
 
 // ---- the dish modal --------------------------------------------------------
 let dishModalId = null;
+const DISH_SHOP_HOST = {
+  getItem: () => (dishModalId && findDish(dishModalId) || {dish: null}).dish,
+  save: () => saveKey("wedding-food", food),
+  // filed on the Shop List under the course it belongs to
+  category: () => (dishModalId && findDish(dishModalId) || {sec: {name: ""}}).sec.name,
+  itemsEl: "dish-modal-shop-items",
+  addRowEl: "dish-modal-shop-add-row",
+};
+document.getElementById("dish-modal-shop-toggle").addEventListener("change", (e) => {
+  document.getElementById("dish-modal-shop-fields").style.display = e.target.checked ? "block" : "none";
+  if (e.target.checked) { shopAddOpen = true; renderShopAddRow(); }
+});
 let dishModalWho = [];
 function renderDishModalWho() {
   const box = document.getElementById("dish-modal-who");
@@ -5252,6 +5296,13 @@ function openDishModal(id) {
     dishGroups(f.sec).map(g => g.name).filter(Boolean).map(g => `<option value="${esc(g)}">`).join("");
   document.getElementById("dish-modal-desc").value = f.dish.desc || "";
   renderDishModalWho();
+  shopHost = DISH_SHOP_HOST;
+  const linked = getShopItemIds(f.dish);
+  document.getElementById("dish-modal-shop-toggle").checked = linked.length > 0;
+  document.getElementById("dish-modal-shop-fields").style.display = linked.length > 0 ? "block" : "none";
+  shopAddOpen = false;
+  renderShopItemsTable();
+  renderShopAddRow();
   document.getElementById("dish-modal").classList.add("open");
   document.getElementById("dish-modal-title").focus();
 }
@@ -5275,6 +5326,7 @@ document.getElementById("dish-modal-save").addEventListener("click", async () =>
   await saveKey("wedding-food", food);
   closeDishModal();
   renderFood();
+  renderShopList();
 });
 
 // ---- the menu panel --------------------------------------------------------
