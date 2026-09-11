@@ -5146,24 +5146,25 @@ function renderFood() {
         <table class="data-table" style="min-width:0;">
           <thead><tr>
             <th>Dish</th>
-            <th>Description</th>
             <th style="width:210px;">Assignee</th>
             <th style="width:36px;"></th>
           </tr></thead>
           <tbody>
             ${dishGroups(sec).map(g => `
-              ${g.name ? `<tr class="dish-group-row"><td colspan="4">
+              ${g.name ? `<tr class="dish-group-row"><td colspan="3">
                 <span style="font-weight:700; letter-spacing:0.08em; text-transform:uppercase; font-size:11.5px; color:var(--primary);">${esc(g.name)}</span>
                 <span class="muted" data-group-note="${sec.id}" data-group="${esc(g.name)}"
                   style="font-size:12px; font-style:italic; margin-left:8px; cursor:pointer; border-bottom:1px dashed transparent;"
                   title="Click to edit the note under this heading">${esc((sec.groupNotes || {})[g.name] || "+ note")}</span>
               </td></tr>` : ""}
               ${g.dishes.map(d => `<tr>
-                <td><span class="task-text" data-dish-open="${d.id}" style="cursor:pointer; font-weight:600;">${esc(d.name)}</span>${d.detail ? ` <span class="muted" style="font-style:italic; font-size:12px;">${esc(d.detail)}</span>` : ""}</td>
-                <td class="muted" data-dish-open="${d.id}" style="cursor:pointer; font-size:13px;">${esc(d.desc || "")}</td>
+                <td data-dish-open="${d.id}" style="cursor:pointer;">
+                  <span class="task-text" style="font-weight:600;">${esc(d.name)}</span>${d.detail ? ` <span class="muted" style="font-style:italic; font-size:12px;">${esc(d.detail)}</span>` : ""}
+                  ${d.desc ? `<div class="muted" style="font-size:12.5px; margin-top:2px; line-height:1.35;">${esc(d.desc)}</div>` : ""}
+                </td>
                 <td><span class="tl-who" style="flex:none;">${whoPickerHtml(d.assignees || [], "dish", d.id)}</span></td>
                 <td style="text-align:right;"><button class="icon-btn" data-dish-remove="${d.id}" aria-label="Remove ${esc(d.name)}" title="Remove">${TRASH_ICON}</button></td>
-              </tr>`).join("")}`).join("") || `<tr><td colspan="4" class="muted" style="padding:12px;">Nothing here yet.</td></tr>`}
+              </tr>`).join("")}`).join("") || `<tr><td colspan="3" class="muted" style="padding:12px;">Nothing here yet.</td></tr>`}
           </tbody>
         </table>
       </div>
