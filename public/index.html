@@ -379,6 +379,12 @@
   .svc-kcombo + .svc-kcombo::before { content: " · "; color: #aaa; white-space: normal; }
   .svc-kcombo b { font-variant-numeric: tabular-nums; }
   .svc-ktotal td { border-top: 1.5pt solid #1D1B29; font-weight: 700; }
+  .todo-checklist { margin: 0 0 6px 62px; padding: 6px 10px 8px; background: var(--surface-1); border-radius: 8px; }
+  .todo-checklist-head { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-soft); margin-bottom: 4px; }
+  .todo-check { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 2px 0; cursor: pointer; }
+  .todo-check input { width: 15px; height: 15px; margin: 0; }
+  @media (max-width: 640px) { .todo-checklist { margin-left: 0; } }
+  .dish-group-row td { background: var(--surface-1); padding-top: 8px !important; padding-bottom: 6px !important; }
   .tl-who { flex: 0 0 190px; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
   .tl-who select { flex: 1 1 auto; min-width: 88px; }
   .tl-chip {
@@ -782,6 +788,7 @@
     <div class="tab" data-tab="guests" data-icon="users"><span>Guest</span></div>
     <div class="tab" data-tab="budget" data-icon="wallet"><span>Budget</span></div>
     <div class="tab" data-tab="timeline" data-icon="clock"><span>Timeline</span></div>
+    <div class="tab" data-tab="food" data-icon="food"><span>Food</span></div>
     <div class="tab" data-tab="activities" data-icon="table"><span>Activity</span></div>
   </div>
 
@@ -793,6 +800,7 @@
   <div id="panel-budget" class="panel"></div>
   <div id="panel-activities" class="panel"></div>
   <div id="panel-timeline" class="panel"></div>
+  <div id="panel-food" class="panel"></div>
 </div>
 
 <div class="modal-overlay" id="tags-modal">
@@ -896,6 +904,33 @@
         <thead><tr><th>Table type</th><th style="width:110px; text-align:right;">Quantity</th></tr></thead>
         <tbody id="table-summary-body"></tbody>
       </table>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="dish-modal">
+  <div class="modal-box" style="max-width:520px;">
+    <h3 id="dish-modal-heading" style="margin:0 0 14px;">Dish</h3>
+    <label class="field-label" for="dish-modal-title">Title</label>
+    <input type="text" id="dish-modal-title" style="width:100%; margin-bottom:12px;" />
+    <div class="row" style="gap:10px; margin-bottom:12px;">
+      <div style="flex:1;">
+        <label class="field-label" for="dish-modal-detail">Detail <span class="muted" style="font-weight:400;">(italic after the name)</span></label>
+        <input type="text" id="dish-modal-detail" placeholder="e.g. Bacardi Silver Rum" style="width:100%;" />
+      </div>
+      <div style="flex:1;">
+        <label class="field-label" for="dish-modal-group">Group <span class="muted" style="font-weight:400;">(menu heading)</span></label>
+        <input type="text" id="dish-modal-group" list="dish-group-list" placeholder="e.g. Cocktails" style="width:100%;" />
+        <datalist id="dish-group-list"></datalist>
+      </div>
+    </div>
+    <label class="field-label" for="dish-modal-desc">Description</label>
+    <textarea id="dish-modal-desc" rows="4" style="width:100%; margin-bottom:12px; resize:vertical;"></textarea>
+    <label class="field-label">Assignee</label>
+    <div id="dish-modal-who" class="tl-who" style="flex:none; margin-bottom:16px;"></div>
+    <div class="modal-actions">
+      <button id="dish-modal-cancel">Cancel</button>
+      <button class="primary" id="dish-modal-save">Save</button>
     </div>
   </div>
 </div>
@@ -1489,8 +1524,13 @@ function goToTab(name) {
   if (tabBtn) tabBtn.classList.add("active");
   document.getElementById("panel-" + name).classList.add("active");
   if (name === "dashboard") renderDashboard();
+  // The to-do cards now show shop-list state, which can change on the Shop
+  // List tab, so arriving here has to redraw rather than show what was last
+  // painted.
+  if (name === "todo") renderTodo();
   if (name === "shoplist") renderShopList();
   if (name === "gifts") renderGiftsPage();
+  if (name === "food") renderFood();
 }
 
 document.querySelectorAll(".tab").forEach(t => {
@@ -1580,6 +1620,7 @@ function icon(name, size) {
   const s = size || 18;
   const paths = {
     users: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path>',
+    food: '<path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"></path><path d="M7 2v20"></path><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"></path>',
     wallet: '<path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"></path><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"></path><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"></path>',
     check: '<path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>',
     heart: '<path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.29 1.51 4.04 3 5.5l7 7Z"></path>',
@@ -1999,7 +2040,24 @@ function todoRowHtml(sectionId, item, draggable) {
         <input type="date" data-due-section="${sectionId}" data-due-item="${item.id}" value="${item.dueDate || ""}" style="flex:0 0 145px;" />
         <select data-assign-section="${sectionId}" data-assign-item="${item.id}" style="flex:0 0 150px;">${options}</select>
         <button class="icon-btn" data-remove-section="${sectionId}" data-remove-item="${item.id}" aria-label="Remove task">${TRASH_ICON}</button>
-      </div>`;
+      </div>${todoChecklistHtml(item, checked)}`;
+}
+
+// The shop items a task owns, as a checklist on the card itself. Ticking one
+// sets the same `bought` flag the Shop List tab reads, so it is one state
+// seen from two places rather than a second list to keep in step. Items are
+// added from the task's edit dialog, where the store and quantity live.
+function todoChecklistHtml(item, taskDone) {
+  const rows = getShopItemIds(item).map(id => shopList.find(r => r.id === id)).filter(Boolean);
+  if (!rows.length || taskDone) return "";
+  const got = rows.filter(r => r.bought).length;
+  return `<div class="todo-checklist">
+    <div class="todo-checklist-head">Shop list &middot; ${got} of ${rows.length}</div>
+    ${rows.map(r => `<label class="todo-check">
+      <input type="checkbox" data-shop-tick="${r.id}" ${r.bought ? "checked" : ""} />
+      <span class="${r.bought ? "strike" : ""}">${esc(r.item || "")}${r.qtyNeeded > 1 ? ` <span class="muted">×${r.qtyNeeded}</span>` : ""}${r.store ? ` <span class="muted">· ${esc(r.store)}</span>` : ""}</span>
+    </label>`).join("")}
+  </div>`;
 }
 
 function renderTodo() {
@@ -2141,11 +2199,22 @@ function renderTodo() {
     renderTodo();
   });
 
-  p.querySelectorAll("input[type=checkbox]").forEach(cb => {
+  // Only the task's own box marks it done. The shop checklist beneath a
+  // task is checkboxes too, and they must not land here.
+  p.querySelectorAll("input[type=checkbox][data-key]").forEach(cb => {
     cb.addEventListener("change", (e) => {
       todoState[e.target.dataset.key] = e.target.checked;
       renderTodo();
       saveKey("wedding-checklist", todoState);
+    });
+  });
+  p.querySelectorAll("[data-shop-tick]").forEach(cb => {
+    cb.addEventListener("change", async (e) => {
+      const row = shopList.find(r => r.id === e.target.dataset.shopTick);
+      if (!row) return;
+      row.bought = e.target.checked;
+      await saveKey("wedding-shop-list", shopList);
+      renderTodo();
     });
   });
   p.querySelectorAll(".task-text").forEach(span => {
@@ -4853,6 +4922,86 @@ function setMomentAssignees(t, list) {
   delete t.assignee;
 }
 
+// The menu, in three courses. Seeded once from the notes that were already
+// scattered across the to-do list - "Finalize Drink Options", "Finalize the
+// Cocktail Food", "Finalize Reception" - plus the six mains guests choose
+// between on the Guest tab.
+let food = {sections: []};
+const FOOD_SEED = [
+  {name: "Drink", menuTitle: "DRINKS", groupNotes: {}, dishes: [
+    {group: "Cocktails", name: "Mojito", detail: "Bacardi Silver Rum",
+     desc: "Muddled mint and fresh lime, lengthened with soda and a touch of syrup."},
+    {group: "Cocktails", name: "Old Fashioned", detail: "Korbel Brandy",
+     desc: "Angostura bitters and orange peel, finished with a brandied cherry."},
+    {group: "Cocktails", name: "Lavender Lemonade", detail: "Vodka, Optional",
+     desc: "Fresh lemon and lavender syrup, topped with lemonade and a lavender sprig."},
+    {group: "White wine", name: "Wollersheim Prairie Fumé", detail: "Wisconsin",
+     desc: "Crisp, semi-dry white with citrus and tropical fruit notes. Pairs well with poultry or cheese."},
+    {group: "White wine", name: "Sightlines by Ara Sauvignon Blanc", detail: "Marlborough, New Zealand",
+     desc: "Lemon and grapefruit with hints of apple and passionfruit. Light to medium-bodied and refreshingly crisp."},
+    {group: "Red wine", name: "2018 Bodegas Esteban Martín Garnacha Syrah", detail: "Spain",
+     desc: "85% Garnacha, 15% Syrah — dark fruit, earth, and mocha notes. Medium-bodied and food-friendly."},
+    {group: "Red wine", name: "Platinum Reserve Cabernet Sauvignon", detail: "Napa Valley, 2020",
+     desc: "90% Cabernet Sauvignon, 10% Petit Verdot — blackberry, dark chocolate, and vanilla oak spice. Full-bodied with a smooth, tannic finish."},
+    {group: "Beer", name: "Spotted Cow", detail: "New Glarus Brewing Co., Wisconsin · Draft",
+     desc: "Farmhouse ale with a light, subtly fruity character and a soft, wheaty finish."},
+    {group: "Beer", name: "Sapporo Premium", detail: "Japan · Cans",
+     desc: "Crisp Japanese lager, clean and refreshing with a light malt finish."},
+    {group: "Beer", name: "Fantasy Factory IPA", detail: "Karben4 Brewing, Madison, WI · 6.3% ABV",
+     desc: "Citra-hopped IPA with notes of tangerine, orange, and tropical fruit."},
+    {group: "Beer", name: "Tsingtao", detail: "Qingdao, China · 4.7% ABV",
+     desc: "Crisp rice lager with light biscuit malt and a clean, mild finish."},
+    {group: "Soda options", name: "Ramune", detail: "Japanese Marble Soda",
+     desc: "Original, strawberry, melon, and lychee."},
+    {group: "Soda options", name: "Chi Forest 元气森林", detail: "Flavored Sparkling Water",
+     desc: "White peach, lychee fizz, grape, and orange."},
+  ]},
+  {name: "Cocktail food", menuTitle: "COCKTAIL HOUR", groupNotes: {}, dishes: [
+    "Cocktail Shrimp", "马克龙 Macarons", "Cheese Board", "Crab Rangoon", "BBQ Chicken",
+    "蜜瓜+香肠 Melon & Sausage", "水果碗 Fruit Bowl", "抹茶饼干 Matcha Cookies", "蛋糕碗 Cake Cups",
+    "Donuts", "盐酥鸡 Popcorn Chicken", "Whole Foods Cake", "Caviar Canapés",
+  ].map(n => ({group: "", name: n, detail: "", desc: ""}))},
+  {name: "Reception", menuTitle: "MENU",
+   groupNotes: {"Starter": "self serve at the food table", "Main course": "to be served"}, dishes: [
+    {group: "Starter", name: "Sashimi & Sushi", detail: "", desc: "Chef's daily selection, served with soy-ginger dip"},
+    {group: "Starter", name: "Beef Butter Brisket", detail: "", desc: "Slow-braised beef, finished with garlic butter"},
+    {group: "Starter", name: "Hibachi Shrimp", detail: "", desc: "Hibachi-seared shrimp, tossed in lemon garlic butter"},
+    {group: "Main course", name: "Lobster", detail: "", desc: ""},
+    {group: "Main course", name: "Scallop", detail: "", desc: ""},
+    {group: "Main course", name: "Filet Mignon", detail: "", desc: ""},
+    {group: "Main course", name: "Chicken Breast", detail: "", desc: ""},
+    {group: "Main course", name: "Salmon", detail: "", desc: ""},
+    {group: "Main course", name: "Garden Hibachi", detail: "", desc: ""},
+    {group: "Dessert", name: "Cupcake", detail: "", desc: ""},
+    {group: "Dessert", name: "Häagen-Dazs Ice Cream", detail: "", desc: "Strawberry, Coffee, Chocolate"},
+  ]},
+];
+function seedFood() {
+  return {sections: FOOD_SEED.map(sec => ({
+    id: uid(), name: sec.name, menuTitle: sec.menuTitle, groupNotes: {...sec.groupNotes},
+    dishes: sec.dishes.map(d => ({id: uid(), name: d.name, detail: d.detail || "",
+                                  desc: d.desc || "", group: d.group || "", assignees: []})),
+  }))};
+}
+// Dishes in the order entered, gathered under their group heading, with the
+// ungrouped ones last. Order of groups is the order they first appear.
+function dishGroups(sec) {
+  const order = [], by = {};
+  (sec.dishes || []).forEach(d => {
+    const g = d.group || "";
+    if (!(g in by)) { by[g] = []; order.push(g); }
+    by[g].push(d);
+  });
+  return order.sort((x, y) => (x === "") - (y === "")).map(g => ({name: g, dishes: by[g]}));
+}
+function findDish(id) {
+  for (const sec of food.sections) {
+    const d = (sec.dishes || []).find(x => x.id === id);
+    if (d) return {sec, dish: d};
+  }
+  return null;
+}
+
 let tlDragId = null;
 let tlJumpId = null;
 let timelineSections = [];
@@ -4939,6 +5088,280 @@ async function exportTimelineDocx() {
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
   return sorted.length;
+}
+
+// ---------------------------------------------------------------- Food ---
+function whoPickerHtml(who, attr, id) {
+  const free = helperTags.filter(h => who.indexOf(h.name) === -1);
+  return `${who.map(n => `<span class="tl-chip">${esc(n)}<button data-${attr}-unassign="${id}"
+      data-name="${esc(n)}" aria-label="Remove ${esc(n)}" title="Remove">&times;</button></span>`).join("")}
+    <select data-${attr}-assign="${id}" title="Add someone">
+      <option value="">${who.length ? "+ Add" : "Unassigned"}</option>
+      ${free.map(h => `<option value="${esc(h.name)}">${esc(h.name)}</option>`).join("")}
+      <option value="__add_new__">+ Add new&hellip;</option>
+      <option value="__manage__">&#9998; Manage tags&hellip;</option>
+    </select>`;
+}
+// Shared by the food table rows and the dish modal: the same two controls,
+// wired the same way, so adding someone here edits the same helper list the
+// to-do and timeline use.
+function wireWhoPicker(root, attr, getList, setList, after) {
+  root.querySelectorAll(`[data-${attr}-assign]`).forEach(sel => {
+    sel.addEventListener("change", async (e) => {
+      const id = e.currentTarget.dataset[attr + "Assign"];
+      if (handleAssigneeAction(e.currentTarget, "", async (name) => {
+        setList(id, getList(id).concat([name])); await after(id);
+      })) return;
+      const name = e.currentTarget.value;
+      if (!name) return;
+      const who = getList(id);
+      if (who.indexOf(name) === -1) setList(id, who.concat([name]));
+      await after(id);
+    });
+  });
+  root.querySelectorAll(`[data-${attr}-unassign]`).forEach(btn => {
+    btn.addEventListener("click", async (e) => {
+      const id = e.currentTarget.dataset[attr + "Unassign"];
+      setList(id, getList(id).filter(n => n !== e.currentTarget.dataset.name));
+      await after(id);
+    });
+  });
+}
+
+function renderFood() {
+  const p = document.getElementById("panel-food");
+  const total = food.sections.reduce((n, sec) => n + (sec.dishes || []).length, 0);
+  let html = `<div class="row" style="justify-content:space-between; align-items:baseline; margin-bottom:12px;">
+    <span class="muted" style="font-size:13px;">${total} dish${total === 1 ? "" : "es"} across ${food.sections.length} sections &middot; click a dish to edit it</span>
+  </div>`;
+
+  food.sections.forEach(sec => {
+    const dishes = sec.dishes || [];
+    html += `<div class="card" style="margin-bottom:16px;">
+      <div class="row" style="justify-content:space-between; align-items:center; margin-bottom:10px;">
+        <span class="section-title" style="margin:0;">${esc(sec.name)} <span class="muted" style="font-weight:500;">(${dishes.length})</span></span>
+        <button data-food-export="${sec.id}" title="Download this section as a printable menu card">Export menu</button>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table" style="min-width:0;">
+          <thead><tr>
+            <th>Dish</th>
+            <th>Description</th>
+            <th style="width:210px;">Assignee</th>
+            <th style="width:36px;"></th>
+          </tr></thead>
+          <tbody>
+            ${dishGroups(sec).map(g => `
+              ${g.name ? `<tr class="dish-group-row"><td colspan="4">
+                <span style="font-weight:700; letter-spacing:0.08em; text-transform:uppercase; font-size:11.5px; color:var(--primary);">${esc(g.name)}</span>
+                <span class="muted" data-group-note="${sec.id}" data-group="${esc(g.name)}"
+                  style="font-size:12px; font-style:italic; margin-left:8px; cursor:pointer; border-bottom:1px dashed transparent;"
+                  title="Click to edit the note under this heading">${esc((sec.groupNotes || {})[g.name] || "+ note")}</span>
+              </td></tr>` : ""}
+              ${g.dishes.map(d => `<tr>
+                <td><span class="task-text" data-dish-open="${d.id}" style="cursor:pointer; font-weight:600;">${esc(d.name)}</span>${d.detail ? ` <span class="muted" style="font-style:italic; font-size:12px;">${esc(d.detail)}</span>` : ""}</td>
+                <td class="muted" data-dish-open="${d.id}" style="cursor:pointer; font-size:13px;">${esc(d.desc || "")}</td>
+                <td><span class="tl-who" style="flex:none;">${whoPickerHtml(d.assignees || [], "dish", d.id)}</span></td>
+                <td style="text-align:right;"><button class="icon-btn" data-dish-remove="${d.id}" aria-label="Remove ${esc(d.name)}" title="Remove">${TRASH_ICON}</button></td>
+              </tr>`).join("")}`).join("") || `<tr><td colspan="4" class="muted" style="padding:12px;">Nothing here yet.</td></tr>`}
+          </tbody>
+        </table>
+      </div>
+      <div class="add-form" style="margin-top:10px; margin-bottom:0;">
+        <input type="text" data-food-new="${sec.id}" placeholder="Add a dish to ${esc(sec.name)}" style="flex:1; min-width:180px;" />
+        <button class="primary" data-food-add="${sec.id}">Add</button>
+      </div>
+    </div>`;
+  });
+  p.innerHTML = html;
+
+  p.querySelectorAll("[data-food-add]").forEach(btn => {
+    const secId = btn.dataset.foodAdd;
+    const input = p.querySelector(`[data-food-new="${secId}"]`);
+    const add = async () => {
+      const name = input.value.trim();
+      if (!name) return;
+      const sec = food.sections.find(x => x.id === secId);
+      if (!sec) return;
+      (sec.dishes = sec.dishes || []).push({id: uid(), name, desc: "", assignees: []});
+      await saveKey("wedding-food", food);
+      renderFood();
+      const again = p.querySelector(`[data-food-new="${secId}"]`);
+      if (again) again.focus();
+    };
+    btn.addEventListener("click", add);
+    input.addEventListener("keydown", (e) => { if (e.key === "Enter") add(); });
+  });
+  p.querySelectorAll("[data-dish-remove]").forEach(btn => {
+    btn.addEventListener("click", async (e) => {
+      const f = findDish(e.currentTarget.dataset.dishRemove);
+      if (!f) return;
+      f.sec.dishes = f.sec.dishes.filter(d => d.id !== f.dish.id);
+      await saveKey("wedding-food", food);
+      renderFood();
+    });
+  });
+  p.querySelectorAll("[data-dish-open]").forEach(el => {
+    el.addEventListener("click", (e) => openDishModal(e.currentTarget.dataset.dishOpen));
+  });
+  p.querySelectorAll("[data-group-note]").forEach(el => {
+    el.addEventListener("click", (e) => {
+      const sec = food.sections.find(x => x.id === e.currentTarget.dataset.groupNote);
+      const g = e.currentTarget.dataset.group;
+      if (!sec) return;
+      openInputModal(`Note under "${g}"`, (sec.groupNotes || {})[g] || "", async (v) => {
+        sec.groupNotes = sec.groupNotes || {};
+        if (v.trim()) sec.groupNotes[g] = v.trim(); else delete sec.groupNotes[g];
+        await saveKey("wedding-food", food);
+        renderFood();
+      });
+    });
+  });
+  p.querySelectorAll("[data-food-export]").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      const sec = food.sections.find(x => x.id === e.currentTarget.dataset.foodExport);
+      if (sec) exportMenuSvg(sec);
+    });
+  });
+  wireWhoPicker(p, "dish",
+    id => (findDish(id) || {dish: {}}).dish.assignees || [],
+    (id, list) => { const f = findDish(id); if (f) f.dish.assignees = list; },
+    async () => { await saveKey("wedding-food", food); renderFood(); });
+}
+
+// ---- the dish modal --------------------------------------------------------
+let dishModalId = null;
+let dishModalWho = [];
+function renderDishModalWho() {
+  const box = document.getElementById("dish-modal-who");
+  box.innerHTML = whoPickerHtml(dishModalWho, "dishm", dishModalId || "new");
+  wireWhoPicker(box, "dishm", () => dishModalWho, (_, list) => { dishModalWho = list; },
+    async () => renderDishModalWho());
+}
+function openDishModal(id) {
+  const f = findDish(id);
+  if (!f) return;
+  dishModalId = id;
+  dishModalWho = (f.dish.assignees || []).slice();
+  document.getElementById("dish-modal-heading").textContent = f.sec.name;
+  document.getElementById("dish-modal-title").value = f.dish.name || "";
+  document.getElementById("dish-modal-detail").value = f.dish.detail || "";
+  document.getElementById("dish-modal-group").value = f.dish.group || "";
+  document.getElementById("dish-group-list").innerHTML =
+    dishGroups(f.sec).map(g => g.name).filter(Boolean).map(g => `<option value="${esc(g)}">`).join("");
+  document.getElementById("dish-modal-desc").value = f.dish.desc || "";
+  renderDishModalWho();
+  document.getElementById("dish-modal").classList.add("open");
+  document.getElementById("dish-modal-title").focus();
+}
+function closeDishModal() {
+  dishModalId = null;
+  document.getElementById("dish-modal").classList.remove("open");
+}
+document.getElementById("dish-modal-cancel").addEventListener("click", closeDishModal);
+document.getElementById("dish-modal").addEventListener("click", (e) => {
+  if (e.target.id === "dish-modal") closeDishModal();
+});
+document.getElementById("dish-modal-save").addEventListener("click", async () => {
+  const f = dishModalId && findDish(dishModalId);
+  if (!f) { closeDishModal(); return; }
+  const name = document.getElementById("dish-modal-title").value.trim();
+  if (name) f.dish.name = name;
+  f.dish.detail = document.getElementById("dish-modal-detail").value.trim();
+  f.dish.group = document.getElementById("dish-modal-group").value.trim();
+  f.dish.desc = document.getElementById("dish-modal-desc").value.trim();
+  f.dish.assignees = dishModalWho.slice();
+  await saveKey("wedding-food", food);
+  closeDishModal();
+  renderFood();
+});
+
+// ---- the menu panel --------------------------------------------------------
+// One panel of the folded print sheet, reproduced: cream ground, the Y&Y
+// monogram, a letterspaced title over a short rule, group headings with an
+// italic note, then each dish as a bold name with an italic detail beside it
+// and a description beneath. Set with <text>, not outlines, so the names
+// stay editable in Illustrator or Canva - they change right up to the day.
+const MENU_FONT = "'Cormorant Garamond', 'EB Garamond', Garamond, Georgia, 'Times New Roman', serif";
+function exportMenuSvg(sec) {
+  const W = 408, H = 1056;                 // 4.25 x 11 in at 96/in: half a letter sheet, tall
+  const CX = W / 2, INK = "#1F1D1A", SOFT = "#6B665E", CREAM = "#F1EEE8";
+  const x = (t) => String(t == null ? "" : t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const spaced = (t) => x(String(t).toUpperCase().split("").join(" "));   // thin-space letterspacing survives every renderer
+
+  // wrap a description to the panel width - <text> does not wrap on its own
+  const wrap = (text, maxChars) => {
+    const words = String(text).split(/\s+/), lines = [];
+    let cur = "";
+    words.forEach(w => {
+      if ((cur + " " + w).trim().length > maxChars && cur) { lines.push(cur); cur = w; }
+      else cur = (cur + " " + w).trim();
+    });
+    if (cur) lines.push(cur);
+    return lines;
+  };
+
+  const groups = dishGroups(sec);
+  const parts = [];
+  let y = 96;
+
+  // monogram, lifted from the header and recoloured to the ink
+  const logo = document.querySelector(".app-logo");
+  if (logo) {
+    const glyphs = [...logo.querySelectorAll("path")].map(pth => pth.outerHTML
+      .replace(/fill="[^"]*"/g, `fill="${INK}"`)).join("");
+    parts.push(`<g transform="translate(${CX - 25},${y - 66}) scale(0.1667)">${glyphs}</g>`);
+  }
+  parts.push(`<line x1="${CX - 22}" y1="${y - 12}" x2="${CX + 22}" y2="${y - 12}" stroke="${INK}" stroke-width="1.1"/>`);
+  parts.push(`<text x="${CX}" y="${y + 26}" text-anchor="middle" font-family="${MENU_FONT}" font-size="30" fill="${INK}">${spaced(sec.menuTitle || sec.name)}</text>`);
+  y += 74;
+
+  groups.forEach(g => {
+    if (g.name) {
+      parts.push(`<text x="${CX}" y="${y}" text-anchor="middle" font-family="${MENU_FONT}" font-size="14.5" fill="${INK}">${spaced(g.name)}</text>`);
+      y += 8;
+      const note = (sec.groupNotes || {})[g.name];
+      if (note) {
+        y += 14;
+        parts.push(`<text x="${CX}" y="${y}" text-anchor="middle" font-family="${MENU_FONT}" font-size="11.5" font-style="italic" fill="${SOFT}">${x(note)}</text>`);
+      }
+      y += 18;
+    }
+    g.dishes.forEach(d => {
+      if (d.detail) {
+        // name and detail on one line, sized as a pair so the line centres
+        parts.push(`<text x="${CX}" y="${y}" text-anchor="middle" font-family="${MENU_FONT}" fill="${INK}"><tspan font-size="13.5" font-weight="700">${x(d.name)}</tspan><tspan font-size="10" font-style="italic" fill="${SOFT}" dx="6">${x(d.detail)}</tspan></text>`);
+      } else {
+        parts.push(`<text x="${CX}" y="${y}" text-anchor="middle" font-family="${MENU_FONT}" font-size="${d.desc ? 13.5 : 14}" font-weight="${d.desc || g.name !== "Main course" ? 700 : 400}" fill="${INK}">${x(d.name)}</text>`);
+      }
+      y += 15;
+      if ((d.desc || "").trim()) {
+        wrap(d.desc, 80).forEach(line => {
+          parts.push(`<text x="${CX}" y="${y}" text-anchor="middle" font-family="${MENU_FONT}" font-size="10" fill="${SOFT}">${x(line)}</text>`);
+          y += 12;
+        });
+      }
+      y += d.desc ? 10 : (g.name === "Main course" ? 8 : 6);
+    });
+    y += 26;
+  });
+
+  parts.push(`<line x1="${CX - 22}" y1="${Math.min(y + 4, H - 40)}" x2="${CX + 22}" y2="${Math.min(y + 4, H - 40)}" stroke="${INK}" stroke-width="1.1"/>`);
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="4.25in" height="11in" viewBox="0 0 ${W} ${H}">
+  <title>${x(sec.menuTitle || sec.name)}</title>
+  <rect width="${W}" height="${H}" fill="${CREAM}"/>
+${parts.join("\n")}
+</svg>`;
+
+  const blob = new Blob([svg], {type: "image/svg+xml;charset=utf-8"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `menu-${(sec.menuTitle || sec.name).toLowerCase().replace(/[^a-z0-9]+/g, "-")}.svg`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return {dishes: (sec.dishes || []).length, usedHeight: y, panelHeight: H};
 }
 
 function renderTimeline() {
@@ -6148,6 +6571,11 @@ function renderDashboard() {
     budget.vendors = BUDGET_SEED.map(v => ({id: uid(), ...v}));
     if (!budget.total) budget.total = 50000;
     await saveKey("wedding-budget", budget);
+  }
+  food = (await loadKey("wedding-food")) || {sections: []};
+  if ((!food.sections || food.sections.length === 0) && maySeed) {
+    food = seedFood();
+    await saveKey("wedding-food", food);
   }
   shopList = (await loadKey("wedding-shop-list")) || [];
   storeOptions = (await loadKey("wedding-store-options")) || [];
