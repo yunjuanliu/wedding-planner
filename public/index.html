@@ -931,8 +931,25 @@
         <datalist id="dish-group-list"></datalist>
       </div>
     </div>
-    <label class="field-label" for="dish-modal-desc">Description</label>
-    <textarea id="dish-modal-desc" rows="4" style="width:100%; margin-bottom:12px; resize:vertical;"></textarea>
+    <label class="field-label" for="dish-modal-desc">Description <span class="muted" style="font-weight:400;">(on the menu)</span></label>
+    <textarea id="dish-modal-desc" rows="3" style="width:100%; margin-bottom:12px; resize:vertical;"></textarea>
+    <div style="border-top:1px solid var(--border); padding-top:12px; margin-bottom:12px;">
+      <div class="muted" style="font-size:11px; text-transform:uppercase; letter-spacing:0.06em; font-weight:700; margin-bottom:8px;">Food label</div>
+      <div class="row" style="gap:10px; margin-bottom:10px;">
+        <div style="flex:1;">
+          <label class="field-label" for="dish-modal-zh">中文名</label>
+          <input type="text" id="dish-modal-zh" placeholder="e.g. 蒜香黄油牛腩" style="width:100%;" />
+        </div>
+        <div style="flex:1;">
+          <label class="field-label" for="dish-modal-en">English name</label>
+          <input type="text" id="dish-modal-en" placeholder="e.g. Beef Butter Brisket" style="width:100%;" />
+        </div>
+      </div>
+      <label class="field-label" for="dish-modal-ing">Ingredients</label>
+      <input type="text" id="dish-modal-ing" placeholder="Beef brisket, butter, garlic" style="width:100%; margin-bottom:8px;" />
+      <label class="field-label" for="dish-modal-ingzh">配料</label>
+      <input type="text" id="dish-modal-ingzh" placeholder="牛腩、黄油、大蒜" style="width:100%;" />
+    </div>
     <label class="field-label">Assignee</label>
     <div id="dish-modal-who" class="tl-who" style="flex:none; margin-bottom:16px;"></div>
     <div style="border-top:1px solid var(--border); padding-top:14px;">
@@ -5178,7 +5195,10 @@ function renderFood() {
     html += `<div class="card dish-section" data-dish-section-drop="${sec.id}" style="margin-bottom:16px;">
       <div class="row" style="justify-content:space-between; align-items:center; margin-bottom:10px;">
         <span class="section-title" style="margin:0;">${esc(sec.name)} <span class="muted" style="font-weight:500;">(${dishes.length})</span></span>
-        <button data-food-export="${sec.id}" title="Download this section as a printable menu card">Export menu</button>
+        <span class="row" style="gap:8px;">
+          ${labelDishes(sec).some(d => d.nameZh || d.ingredients) ? `<button data-food-labels="${sec.id}" title="4 x 3 in cards for the food table: ${labelDishes(sec).length} dishes, ${Math.ceil(labelDishes(sec).length / 6)} sheet${Math.ceil(labelDishes(sec).length / 6) === 1 ? "" : "s"}">Export labels</button>` : ""}
+          <button data-food-export="${sec.id}" title="Download this section as a printable menu card">Export menu</button>
+        </span>
       </div>
       <div class="table-wrap">
         <table class="data-table" style="min-width:0;">
@@ -5199,6 +5219,7 @@ function renderFood() {
                 <td data-dish-open="${d.id}" style="cursor:pointer;">
                   <span class="tl-handle dish-handle" title="Drag to reorder, or into another section">&#10303;</span><span class="task-text" style="font-weight:600;">${esc(d.name)}</span>${d.detail ? ` <span class="muted" style="font-style:italic; font-size:12px;">${esc(d.detail)}</span>` : ""}
                   ${d.desc ? `<div class="muted" style="font-size:12.5px; margin-top:2px; line-height:1.35;">${esc(d.desc)}</div>` : ""}
+                  ${d.ingredients || d.ingredientsZh ? `<div class="muted" style="font-size:11.5px; margin-top:3px;"><span style="font-weight:600;">Label:</span> ${esc([d.nameZh, d.nameEn].filter(Boolean).join(" · "))}${d.ingredients ? ` — ${esc(d.ingredients)}` : ""}</div>` : ""}
                   ${(() => { const n = getShopItemIds(d).length; return n ? `<div class="muted" style="font-size:11.5px; margin-top:3px;">&#128722; ${n} on the shop list</div>` : ""; })()}
                 </td>
                 <td><span class="tl-who" style="flex:none;">${whoPickerHtml(d.assignees || [], "dish", d.id)}</span></td>
@@ -5257,6 +5278,15 @@ function renderFood() {
       });
     });
   });
+  p.querySelectorAll("[data-food-labels]").forEach(btn => {
+    btn.addEventListener("click", async (e) => {
+      const sec = food.sections.find(x => x.id === e.currentTarget.dataset.foodLabels);
+      if (!sec) return;
+      const b = e.currentTarget; b.disabled = true;
+      const n = await exportLabelsSvg(sec);
+      b.textContent = `${n} labels`; setTimeout(() => { b.textContent = "Export labels"; b.disabled = false; }, 2000);
+    });
+  });
   p.querySelectorAll("[data-food-export]").forEach(btn => {
     btn.addEventListener("click", (e) => {
       const sec = food.sections.find(x => x.id === e.currentTarget.dataset.foodExport);
@@ -5268,6 +5298,46 @@ function renderFood() {
     id => (findDish(id) || {dish: {}}).dish.assignees || [],
     (id, list) => { const f = findDish(id); if (f) f.dish.assignees = list; },
     async () => { await saveKey("wedding-food", food); renderFood(); });
+}
+
+// First-draft label copy for the dishes already on the menu, keyed by the
+// name as it stands. Applied once, and only into EMPTY fields: anything
+// typed by hand wins, and a dish renamed since will simply not match.
+const LABEL_DRAFTS = {
+  "Cocktail Shrimp":         {zh: "鲜虾冷盘", en: "Cocktail Shrimp",         ing: "Shrimp, cocktail sauce (tomato, horseradish, lemon)", ingZh: "虾、鸡尾酒酱（番茄、辣根、柠檬）"},
+  "马克龙 Macarons":          {zh: "马克龙",   en: "Macarons",                ing: "Almond flour, egg white, sugar, buttercream",         ingZh: "杏仁粉、蛋白、糖、奶油"},
+  "Cheese Board":            {zh: "芝士拼盘", en: "Cheese Board",            ing: "Assorted cheeses, crackers, grapes, nuts",             ingZh: "各式芝士、饼干、葡萄、坚果"},
+  "Crab Rangoon":            {zh: "炸蟹角",   en: "Crab Rangoon",            ing: "Cream cheese, crab, scallion, wonton wrapper",         ingZh: "奶油芝士、蟹肉、葱、馄饨皮"},
+  "BBQ Chicken":             {zh: "烧烤鸡",   en: "BBQ Chicken",             ing: "Chicken, barbecue sauce",                             ingZh: "鸡肉、烧烤酱"},
+  "蜜瓜+香肠 Melon & Sausage":{zh: "蜜瓜香肠", en: "Melon & Sausage",         ing: "Cantaloupe, cured sausage",                            ingZh: "蜜瓜、香肠"},
+  "水果碗 Fruit Bowl":        {zh: "水果碗",   en: "Fruit Bowl",              ing: "Seasonal fresh fruit",                                ingZh: "时令新鲜水果"},
+  "泡芙":                     {zh: "泡芙",     en: "Cream Puffs",             ing: "Choux pastry, cream, egg, butter",                    ingZh: "泡芙皮、奶油、鸡蛋、黄油"},
+  "蛋糕碗 Cake Cups":         {zh: "蛋糕杯",   en: "Cake Cups",               ing: "Sponge cake, whipped cream",                          ingZh: "海绵蛋糕、鲜奶油"},
+  "Donuts":                  {zh: "甜甜圈",   en: "Donuts",                  ing: "Flour, sugar, egg, glaze",                            ingZh: "面粉、糖、鸡蛋、糖霜"},
+  "盐酥鸡 Popcorn Chicken":   {zh: "盐酥鸡",   en: "Taiwanese Popcorn Chicken", ing: "Chicken, sweet potato starch, basil, five-spice", ingZh: "鸡肉、地瓜粉、九层塔、五香粉"},
+  "Whole Foods Cake":        {zh: "蛋糕",     en: "Cake",                    ing: "Flour, sugar, egg, butter, cream",                    ingZh: "面粉、糖、鸡蛋、黄油、奶油"},
+  "鱼子酱":                   {zh: "鱼子酱",   en: "Caviar",                  ing: "Caviar, blini, crème fraîche",                        ingZh: "鱼子酱、薄饼、法式酸奶油"},
+  "沙拉🥗":                   {zh: "沙拉",     en: "Salad",                   ing: "Mixed greens, dressing",                              ingZh: "混合生菜、沙拉酱"},
+  "Sashimi & Sushi":         {zh: "刺身寿司", en: "Sashimi & Sushi",         ing: "Raw fish, sushi rice, nori, soy-ginger dip",          ingZh: "生鱼片、寿司饭、海苔、酱油姜汁"},
+  "Beef Butter Brisket":     {zh: "蒜香黄油牛腩", en: "Beef Butter Brisket", ing: "Beef brisket, butter, garlic",                        ingZh: "牛腩、黄油、大蒜"},
+  "Hibachi Shrimp":          {zh: "铁板虾",   en: "Hibachi Shrimp",          ing: "Shrimp, butter, garlic, lemon",                       ingZh: "虾、黄油、大蒜、柠檬"},
+  "Cupcake":                 {zh: "纸杯蛋糕", en: "Cupcake",                 ing: "Flour, sugar, egg, butter, frosting",                 ingZh: "面粉、糖、鸡蛋、黄油、糖霜"},
+  "Häagen-Dazs Ice Cream":   {zh: "哈根达斯冰淇淋", en: "Häagen-Dazs Ice Cream", ing: "Cream, milk, sugar, egg — strawberry, coffee, chocolate", ingZh: "奶油、牛奶、糖、鸡蛋 — 草莓、咖啡、巧克力"},
+};
+async function applyLabelDrafts() {
+  if (await loadKey("wedding-food-labels-drafted")) return;
+  let touched = 0;
+  food.sections.forEach(sec => (sec.dishes || []).forEach(d => {
+    const t = LABEL_DRAFTS[(d.name || "").trim()];
+    if (!t) return;
+    if (!d.nameZh && t.zh)          { d.nameZh = t.zh; touched++; }
+    if (!d.nameEn && t.en)          { d.nameEn = t.en; touched++; }
+    if (!d.ingredients && t.ing)    { d.ingredients = t.ing; touched++; }
+    if (!d.ingredientsZh && t.ingZh){ d.ingredientsZh = t.ingZh; touched++; }
+  }));
+  if (touched) await saveKey("wedding-food", food);
+  await saveKey("wedding-food-labels-drafted", true);
+  return touched;
 }
 
 // ---- reordering ------------------------------------------------------------
@@ -5400,6 +5470,10 @@ function openDishModal(id) {
   document.getElementById("dish-group-list").innerHTML =
     dishGroups(f.sec).map(g => g.name).filter(Boolean).map(g => `<option value="${esc(g)}">`).join("");
   document.getElementById("dish-modal-desc").value = f.dish.desc || "";
+  document.getElementById("dish-modal-zh").value = f.dish.nameZh || "";
+  document.getElementById("dish-modal-en").value = f.dish.nameEn || "";
+  document.getElementById("dish-modal-ing").value = f.dish.ingredients || "";
+  document.getElementById("dish-modal-ingzh").value = f.dish.ingredientsZh || "";
   renderDishModalWho();
   shopHost = DISH_SHOP_HOST;
   const linked = getShopItemIds(f.dish);
@@ -5427,6 +5501,10 @@ document.getElementById("dish-modal-save").addEventListener("click", async () =>
   f.dish.detail = document.getElementById("dish-modal-detail").value.trim();
   f.dish.group = document.getElementById("dish-modal-group").value.trim();
   f.dish.desc = document.getElementById("dish-modal-desc").value.trim();
+  f.dish.nameZh = document.getElementById("dish-modal-zh").value.trim();
+  f.dish.nameEn = document.getElementById("dish-modal-en").value.trim();
+  f.dish.ingredients = document.getElementById("dish-modal-ing").value.trim();
+  f.dish.ingredientsZh = document.getElementById("dish-modal-ingzh").value.trim();
   f.dish.assignees = dishModalWho.slice();
   await saveKey("wedding-food", food);
   closeDishModal();
@@ -5520,6 +5598,135 @@ ${parts.join("\n")}
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
   return {dishes: (sec.dishes || []).length, usedHeight: y, panelHeight: H};
+}
+
+// ---- food labels -------------------------------------------------------------
+// A flat 4 x 3 in card per dish for the food table: Chinese name, English
+// name, then the ingredients in both languages. Six to a letter sheet with
+// faint cut lines; one SVG per sheet. Same ground, ink and monogram as the
+// menu so the table reads as one set with the cards on it.
+const LABEL_W = 384, LABEL_H = 288;            // 4 x 3 in at 96/in
+const SHEET_W = 816, SHEET_H = 1056;           // letter
+const LABELS_PER_SHEET = 6;
+const CJK_FONT = "'Songti SC', 'Noto Serif CJK SC', 'Source Han Serif SC', SimSun, serif";
+const hasCjk = t => /[㐀-鿿]/.test(t || "");
+
+// Which dishes get a card. Anything plated and carried to the table has
+// nowhere to stand one, so the group whose note says it is served is left
+// out. Everything else on the course gets one.
+function labelDishes(sec) {
+  return (sec.dishes || []).filter(d => {
+    const note = ((sec.groupNotes || {})[d.group || ""] || "").toLowerCase();
+    return !/served/.test(note);
+  });
+}
+function labelNames(d) {
+  const name = d.name || "";
+  const cjk = (name.match(/[㐀-鿿][㐀-鿿\s·+]*/g) || []).join("").trim();
+  const latin = name.replace(/[㐀-鿿]/g, "").replace(/[\s·+]+/g, " ").trim();
+  return {
+    zh: d.nameZh || cjk,
+    en: d.nameEn || latin || name,
+  };
+}
+function labelSvg(d, ox, oy) {
+  const x = (t) => String(t == null ? "" : t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const INK = "#1F1D1A", SOFT = "#6B665E", CREAM = "#F1EEE8";
+  const {zh, en} = labelNames(d);
+  const cx = ox + LABEL_W / 2;
+  const wrap = (text, maxChars) => {
+    const out = []; let cur = "";
+    String(text || "").split(/(\s+)/).forEach(w => {
+      if (!w.trim()) { cur += w; return; }
+      if ((cur + w).trim().length > maxChars && cur.trim()) { out.push(cur.trim()); cur = w; }
+      else cur += w;
+    });
+    if (cur.trim()) out.push(cur.trim());
+    return out;
+  };
+  // Chinese has no spaces to wrap on: break by character count
+  const wrapZh = (text, maxChars) => {
+    const t = String(text || ""), out = [];
+    for (let i = 0; i < t.length; i += maxChars) out.push(t.slice(i, i + maxChars));
+    return out;
+  };
+  const parts = [];
+  parts.push(`<rect x="${ox}" y="${oy}" width="${LABEL_W}" height="${LABEL_H}" fill="${CREAM}"/>`);
+  parts.push(`<rect x="${ox + 10}" y="${oy + 10}" width="${LABEL_W - 20}" height="${LABEL_H - 20}" fill="none" stroke="${INK}" stroke-width="0.7"/>`);
+
+  // monogram, small, top centre
+  const logo = document.querySelector(".app-logo");
+  if (logo) {
+    const glyphs = [...logo.querySelectorAll("path")].map(pth => pth.outerHTML.replace(/fill="[^"]*"/g, `fill="${INK}"`)).join("");
+    parts.push(`<g transform="translate(${cx - 15},${oy + 18}) scale(0.1)">${glyphs}</g>`);
+  }
+
+  // Lay the text out from a zero origin, measure it, then drop it into the
+  // middle of the space under the monogram - so a two-line and a five-line
+  // label both sit centred rather than hugging the top.
+  const text = [];
+  let y = 0;
+  // English leads, sized to the card's width; Chinese sits beneath it.
+  if (en) {
+    const enSize = en.length > 24 ? 17 : en.length > 16 ? 21 : 26;
+    y += enSize;
+    text.push(`<text x="${cx}" y="${y}" text-anchor="middle" font-family="${MENU_FONT}" font-size="${enSize}" letter-spacing="${enSize > 20 ? 2 : 1.5}" fill="${INK}">${x(en.toUpperCase())}</text>`);
+    y += 8;
+  }
+  if (zh && zh !== en) {
+    const zhSize = zh.length > 8 ? 18 : 22;
+    y += zhSize + 4;
+    text.push(`<text x="${cx}" y="${y}" text-anchor="middle" font-family="${CJK_FONT}" font-size="${zhSize}" fill="${INK}">${x(zh)}</text>`);
+  }
+  y += 14;
+  text.push(`<line x1="${cx - 22}" y1="${y}" x2="${cx + 22}" y2="${y}" stroke="${INK}" stroke-width="0.9"/>`);
+  y += 8;
+  const ing = d.ingredients || "", ingZh = d.ingredientsZh || "";
+  wrap(ing, 52).forEach(line => {
+    y += 15;
+    text.push(`<text x="${cx}" y="${y}" text-anchor="middle" font-family="${MENU_FONT}" font-size="11.5" fill="${SOFT}">${x(line)}</text>`);
+  });
+  wrapZh(ingZh, 26).forEach(line => {
+    y += 16;
+    text.push(`<text x="${cx}" y="${y}" text-anchor="middle" font-family="${CJK_FONT}" font-size="11.5" fill="${SOFT}">${x(line)}</text>`);
+  });
+  const regionTop = oy + 50, regionH = LABEL_H - 50 - 18;
+  const dy = regionTop + Math.max(0, (regionH - y) / 2);
+  parts.push(`<g transform="translate(0,${dy.toFixed(1)})">${text.join("\n")}</g>`);
+  return parts.join("\n");
+}
+async function exportLabelsSvg(sec) {
+  const dishes = labelDishes(sec);
+  if (!dishes.length) return 0;
+  const sheets = Math.ceil(dishes.length / LABELS_PER_SHEET);
+  const marginX = (SHEET_W - 2 * LABEL_W) / 2, marginY = (SHEET_H - 3 * LABEL_H) / 2;
+  for (let sIdx = 0; sIdx < sheets; sIdx++) {
+    const page = dishes.slice(sIdx * LABELS_PER_SHEET, (sIdx + 1) * LABELS_PER_SHEET);
+    const body = page.map((d, i) => {
+      const col = i % 2, row = Math.floor(i / 2);
+      return labelSvg(d, marginX + col * LABEL_W, marginY + row * LABEL_H);
+    }).join("\n");
+    // cut lines: the label edges, faint, on top of the cards
+    const cuts = [];
+    for (let c = 0; c <= 2; c++) cuts.push(`<line x1="${marginX + c * LABEL_W}" y1="${marginY - 12}" x2="${marginX + c * LABEL_W}" y2="${marginY + 3 * LABEL_H + 12}"/>`);
+    for (let r = 0; r <= 3; r++) cuts.push(`<line x1="${marginX - 12}" y1="${marginY + r * LABEL_H}" x2="${marginX + 2 * LABEL_W + 12}" y2="${marginY + r * LABEL_H}"/>`);
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="8.5in" height="11in" viewBox="0 0 ${SHEET_W} ${SHEET_H}">
+  <title>${sec.name} food labels, sheet ${sIdx + 1} of ${sheets}</title>
+  <rect width="${SHEET_W}" height="${SHEET_H}" fill="#FFFFFF"/>
+${body}
+  <g stroke="#B9B4AC" stroke-width="0.5" stroke-dasharray="4 3">${cuts.join("")}</g>
+</svg>`;
+    const blob = new Blob([svg], {type: "image/svg+xml;charset=utf-8"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `labels-${sec.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-sheet${sIdx + 1}.svg`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    // the browser needs a beat between downloads started by one click
+    if (sIdx < sheets - 1) await new Promise(r => setTimeout(r, 350));
+  }
+  return dishes.length;
 }
 
 function renderTimeline() {
@@ -6735,6 +6942,7 @@ function renderDashboard() {
     food = seedFood();
     await saveKey("wedding-food", food);
   }
+  if (maySeed && food.sections.length) await applyLabelDrafts();
   shopList = (await loadKey("wedding-shop-list")) || [];
   storeOptions = (await loadKey("wedding-store-options")) || [];
   if (storeOptions.length === 0 && maySeed) {
