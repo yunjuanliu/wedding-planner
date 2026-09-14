@@ -384,6 +384,13 @@
   .todo-check { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 2px 0; cursor: pointer; }
   .todo-check input { width: 15px; height: 15px; margin: 0; }
   @media (max-width: 640px) { .todo-checklist { margin-left: 0; } }
+  .dish-row.dragging { opacity: 0.4; }
+  .dish-row.drag-over-top td { box-shadow: inset 0 2px 0 var(--primary); }
+  .dish-row.drag-over-bottom td { box-shadow: inset 0 -2px 0 var(--primary); }
+  .dish-group-row.drag-over td { box-shadow: inset 0 -2px 0 var(--primary); }
+  .dish-section.drag-over { box-shadow: 0 0 0 2px var(--primary); }
+  .dish-handle { display: inline-block; margin-right: 6px; vertical-align: -1px; }
+  .dish-row:hover .dish-handle { opacity: 1; }
   .dish-group-row td { background: var(--surface-1); padding-top: 8px !important; padding-bottom: 6px !important; }
   .tl-who { flex: 0 0 190px; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
   .tl-who select { flex: 1 1 auto; min-width: 88px; }
@@ -5168,7 +5175,7 @@ function renderFood() {
 
   food.sections.forEach(sec => {
     const dishes = sec.dishes || [];
-    html += `<div class="card" style="margin-bottom:16px;">
+    html += `<div class="card dish-section" data-dish-section-drop="${sec.id}" style="margin-bottom:16px;">
       <div class="row" style="justify-content:space-between; align-items:center; margin-bottom:10px;">
         <span class="section-title" style="margin:0;">${esc(sec.name)} <span class="muted" style="font-weight:500;">(${dishes.length})</span></span>
         <button data-food-export="${sec.id}" title="Download this section as a printable menu card">Export menu</button>
@@ -5182,15 +5189,15 @@ function renderFood() {
           </tr></thead>
           <tbody>
             ${dishGroups(sec).map(g => `
-              ${g.name ? `<tr class="dish-group-row"><td colspan="3">
+              ${g.name ? `<tr class="dish-group-row" data-dish-group-drop="${sec.id}" data-group="${esc(g.name)}"><td colspan="3">
                 <span style="font-weight:700; letter-spacing:0.08em; text-transform:uppercase; font-size:11.5px; color:var(--primary);">${esc(g.name)}</span>
                 <span class="muted" data-group-note="${sec.id}" data-group="${esc(g.name)}"
                   style="font-size:12px; font-style:italic; margin-left:8px; cursor:pointer; border-bottom:1px dashed transparent;"
                   title="Click to edit the note under this heading">${esc((sec.groupNotes || {})[g.name] || "+ note")}</span>
               </td></tr>` : ""}
-              ${g.dishes.map(d => `<tr>
+              ${g.dishes.map(d => `<tr class="dish-row" draggable="true" data-dish-row="${d.id}">
                 <td data-dish-open="${d.id}" style="cursor:pointer;">
-                  <span class="task-text" style="font-weight:600;">${esc(d.name)}</span>${d.detail ? ` <span class="muted" style="font-style:italic; font-size:12px;">${esc(d.detail)}</span>` : ""}
+                  <span class="tl-handle dish-handle" title="Drag to reorder, or into another section">&#10303;</span><span class="task-text" style="font-weight:600;">${esc(d.name)}</span>${d.detail ? ` <span class="muted" style="font-style:italic; font-size:12px;">${esc(d.detail)}</span>` : ""}
                   ${d.desc ? `<div class="muted" style="font-size:12.5px; margin-top:2px; line-height:1.35;">${esc(d.desc)}</div>` : ""}
                   ${(() => { const n = getShopItemIds(d).length; return n ? `<div class="muted" style="font-size:11.5px; margin-top:3px;">&#128722; ${n} on the shop list</div>` : ""; })()}
                 </td>
@@ -5256,10 +5263,108 @@ function renderFood() {
       if (sec) exportMenuSvg(sec);
     });
   });
+  bindDishDrag(p);
   wireWhoPicker(p, "dish",
     id => (findDish(id) || {dish: {}}).dish.assignees || [],
     (id, list) => { const f = findDish(id); if (f) f.dish.assignees = list; },
     async () => { await saveKey("wedding-food", food); renderFood(); });
+}
+
+// ---- reordering ------------------------------------------------------------
+// Dishes are ordered by their place in the section's array, and grouped by
+// first appearance, so one drag can do all three things a menu needs:
+// reorder within a group, move to another group, move to another section.
+// Dropping on a dish lands beside it and takes its group; dropping on a
+// group heading lands at the end of that group; dropping on a section's
+// empty space lands at the end of the section, group unchanged.
+let dishDragId = null;
+function takeDish(id) {
+  const f = findDish(id);
+  if (!f) return null;
+  f.sec.dishes = f.sec.dishes.filter(d => d.id !== id);
+  return f.dish;
+}
+async function dropDishBeside(draggedId, targetId, after) {
+  if (draggedId === targetId) return;
+  const target = findDish(targetId);
+  if (!target) return;
+  const moved = takeDish(draggedId);
+  if (!moved) return;
+  moved.group = target.dish.group || "";
+  const list = target.sec.dishes;
+  const at = list.findIndex(d => d.id === targetId) + (after ? 1 : 0);
+  list.splice(at, 0, moved);
+  await saveKey("wedding-food", food);
+  renderFood();
+}
+async function dropDishInGroup(draggedId, secId, group) {
+  const sec = food.sections.find(x => x.id === secId);
+  if (!sec) return;
+  const moved = takeDish(draggedId);
+  if (!moved) return;
+  moved.group = group;
+  let at = -1;
+  sec.dishes.forEach((d, i) => { if ((d.group || "") === group) at = i; });
+  sec.dishes.splice(at + 1, 0, moved);
+  await saveKey("wedding-food", food);
+  renderFood();
+}
+async function dropDishInSection(draggedId, secId) {
+  const sec = food.sections.find(x => x.id === secId);
+  if (!sec) return;
+  const moved = takeDish(draggedId);
+  if (!moved) return;
+  sec.dishes.push(moved);
+  await saveKey("wedding-food", food);
+  renderFood();
+}
+function bindDishDrag(p) {
+  const clear = () => p.querySelectorAll(".drag-over-top, .drag-over-bottom, .drag-over")
+    .forEach(el => el.classList.remove("drag-over-top", "drag-over-bottom", "drag-over"));
+
+  p.querySelectorAll(".dish-row").forEach(row => {
+    row.addEventListener("dragstart", (e) => {
+      if (["INPUT", "SELECT", "TEXTAREA", "BUTTON"].includes(e.target.tagName)) { e.preventDefault(); return; }
+      dishDragId = row.dataset.dishRow;
+      row.classList.add("dragging");
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", "");
+    });
+    row.addEventListener("dragend", () => { row.classList.remove("dragging"); clear(); dishDragId = null; });
+    row.addEventListener("dragover", (e) => {
+      if (!dishDragId) return;
+      e.preventDefault(); e.dataTransfer.dropEffect = "move";
+      const r = row.getBoundingClientRect();
+      row.classList.remove("drag-over-top", "drag-over-bottom");
+      row.classList.add(e.clientY < r.top + r.height / 2 ? "drag-over-top" : "drag-over-bottom");
+    });
+    row.addEventListener("dragleave", () => row.classList.remove("drag-over-top", "drag-over-bottom"));
+    row.addEventListener("drop", (e) => {
+      if (!dishDragId) return;
+      e.preventDefault(); e.stopPropagation();
+      const r = row.getBoundingClientRect();
+      dropDishBeside(dishDragId, row.dataset.dishRow, e.clientY >= r.top + r.height / 2);
+    });
+  });
+  p.querySelectorAll("[data-dish-group-drop]").forEach(row => {
+    row.addEventListener("dragover", (e) => { if (dishDragId) { e.preventDefault(); row.classList.add("drag-over"); } });
+    row.addEventListener("dragleave", () => row.classList.remove("drag-over"));
+    row.addEventListener("drop", (e) => {
+      if (!dishDragId) return;
+      e.preventDefault(); e.stopPropagation();
+      dropDishInGroup(dishDragId, row.dataset.dishGroupDrop, row.dataset.group);
+    });
+  });
+  p.querySelectorAll("[data-dish-section-drop]").forEach(card => {
+    card.addEventListener("dragover", (e) => { if (dishDragId) { e.preventDefault(); card.classList.add("drag-over"); } });
+    card.addEventListener("dragleave", (e) => { if (!card.contains(e.relatedTarget)) card.classList.remove("drag-over"); });
+    card.addEventListener("drop", (e) => {
+      if (!dishDragId) return;
+      if (e.target.closest(".dish-row, [data-dish-group-drop]")) return;   // those handled it
+      e.preventDefault();
+      dropDishInSection(dishDragId, card.dataset.dishSectionDrop);
+    });
+  });
 }
 
 // ---- the dish modal --------------------------------------------------------
