@@ -5038,6 +5038,8 @@ function seedFood() {
                                   desc: d.desc || "", group: d.group || "", assignees: []})),
   }))};
 }
+// The bar has no food-table cards: nothing on it is plated for self-serve.
+function isDrinkSection(sec) { return /drink|bar|beverage/i.test(sec.name || ""); }
 // Dishes in the order entered, gathered under their group heading, with the
 // ungrouped ones last. Order of groups is the order they first appear.
 function dishGroups(sec) {
@@ -5196,7 +5198,7 @@ function renderFood() {
       <div class="row" style="justify-content:space-between; align-items:center; margin-bottom:10px;">
         <span class="section-title" style="margin:0;">${esc(sec.name)} <span class="muted" style="font-weight:500;">(${dishes.length})</span></span>
         <span class="row" style="gap:8px;">
-          ${labelDishes(sec).some(d => d.nameZh || d.ingredients) ? `<button data-food-labels="${sec.id}" title="4 x 3 in cards for the food table: ${labelDishes(sec).length} dishes, ${Math.ceil(labelDishes(sec).length / 6)} sheet${Math.ceil(labelDishes(sec).length / 6) === 1 ? "" : "s"}">Export labels</button>` : ""}
+          ${!isDrinkSection(sec) && labelDishes(sec).some(d => d.nameZh || d.ingredients) ? `<button data-food-labels="${sec.id}" title="4 x 3 in cards for the food table: ${labelDishes(sec).length} dishes, ${Math.ceil(labelDishes(sec).length / 6)} sheet${Math.ceil(labelDishes(sec).length / 6) === 1 ? "" : "s"}">Export labels</button>` : ""}
           <button data-food-export="${sec.id}" title="Download this section as a printable menu card">Export menu</button>
         </span>
       </div>
