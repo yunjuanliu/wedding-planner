@@ -649,6 +649,11 @@
   .tl-handle:hover { color: var(--primary); }
   .tl-handle:active { cursor: grabbing; }
   .tl-fade { opacity: 0; transition: opacity 0.15s; }
+  .photo-num { flex: 0 0 26px; font-weight: 700; color: var(--ink-soft); text-align: right; }
+  .photo-time { flex: 0 0 82px; font-weight: 600; color: var(--primary); background: var(--primary-light); border-radius: 8px; padding: 5px 8px; text-align: center; font-size: 13px; }
+  .photo-min { flex: 0 0 62px; text-align: right; padding: 5px 6px; }
+  .photo-edit { cursor: pointer; border-bottom: 1px dashed transparent; }
+  .photo-edit:hover { border-bottom-color: var(--primary); }
   .tl-card:hover .tl-fade { opacity: 1; }
   @keyframes tlPulse {
     0%   { box-shadow: 0 0 0 3px var(--primary); }
@@ -823,6 +828,7 @@
   <div id="panel-todo" class="panel"></div>
   <div id="panel-shoplist" class="panel"></div>
   <div id="panel-gifts" class="panel"></div>
+  <div id="panel-photos" class="panel"></div>
   <div id="panel-guests" class="panel"></div>
   <div id="panel-budget" class="panel"></div>
   <div id="panel-activities" class="panel"></div>
@@ -1605,6 +1611,7 @@ function goToTab(name) {
   if (name === "todo") renderTodo();
   if (name === "shoplist") renderShopList();
   if (name === "gifts") renderGiftsPage();
+  if (name === "photos") renderPhotoList();
   if (name === "food") renderFood();
 }
 
@@ -5167,6 +5174,212 @@ async function exportTimelineDocx() {
   return sorted.length;
 }
 
+// ---- Group photo order ------------------------------------------------
+// The shot list the photographer works down after the ceremony. Each group
+// has its own run time; the clock time is worked out from the start time
+// and everything above it, so reordering or retiming one group moves the
+// rest.
+const PHOTO_SEED = {start: "4:30 pm", groups: [
+  {name: "Couple with both sets of parents", who: "Bride, Groom, both sets of parents", minutes: 3},
+  {name: "Couple with bride's parents", who: "Bride, Groom, bride's parents", minutes: 2},
+  {name: "Couple with bride's immediate family", who: "Bride, Groom, bride's parents & siblings", minutes: 3},
+  {name: "Couple with bride's extended family", who: "Grandparents, aunts, uncles, cousins", minutes: 3},
+  {name: "Couple with groom's parents", who: "Bride, Groom, groom's parents", minutes: 2},
+  {name: "Couple with groom's immediate family", who: "Bride, Groom, groom's parents & siblings", minutes: 3},
+  {name: "Couple with groom's extended family", who: "Grandparents, aunts, uncles, cousins", minutes: 3},
+  {name: "Couple with grandparents", who: "All grandparents", minutes: 2},
+  {name: "Couple with full bridal party", who: "Bridesmaids & groomsmen", minutes: 3},
+  {name: "Bride with bridesmaids", who: "Bridesmaids", minutes: 2},
+  {name: "Groom with groomsmen", who: "Groomsmen", minutes: 2},
+  {name: "Full guest group shot", who: "Everyone", minutes: 5},
+]};
+let photoList = null;
+function seedPhotoList() {
+  return {start: PHOTO_SEED.start, groups: PHOTO_SEED.groups.map(g => ({id: uid(), ...g}))};
+}
+function minutesToTime(total) {
+  const m = ((total % 1440) + 1440) % 1440;
+  let h = Math.floor(m / 60); const min = m % 60;
+  const ap = h >= 12 ? "pm" : "am";
+  h = h % 12; if (h === 0) h = 12;
+  return `${h}:${String(min).padStart(2, "0")} ${ap}`;
+}
+function photoMinutes(g) { const n = Number(g.minutes); return isFinite(n) && n > 0 ? n : 0; }
+// Each group with the clock time it starts, plus the end of the whole run.
+function photoSchedule() {
+  let at = timeToMinutes(photoList.start);
+  const rows = photoList.groups.map((g, i) => { const r = {g, n: i + 1, at}; at += photoMinutes(g); return r; });
+  return {rows, end: at, total: at - timeToMinutes(photoList.start)};
+}
+async function savePhotoList() { await saveKey("wedding-photo-list", photoList); }
+
+function renderPhotoList() {
+  const p = document.getElementById("panel-photos");
+  if (!photoList) photoList = {start: PHOTO_SEED.start, groups: []};
+  const sched = photoSchedule();
+  let html = `<div class="row" style="justify-content:space-between; margin-bottom:14px;">
+    <button id="photos-back" style="display:inline-flex; align-items:center; gap:6px;">&larr; Back to Timeline</button>
+    <button id="photos-export" title="Download the shot list as a Word document">Download photo order</button>
+  </div>
+  <div class="row" style="justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
+    <div>
+      <p class="section-title" style="margin:0 0 4px;">Group photo order</p>
+      <span class="muted" style="font-size:13px;">${photoList.groups.length} group${photoList.groups.length === 1 ? "" : "s"}
+        &middot; ${sched.total} min &middot; ${normaliseTime(photoList.start) || photoList.start} &ndash; ${minutesToTime(sched.end)}
+        &middot; drag to reorder, click a name to edit</span>
+    </div>
+    <label class="row" style="gap:8px; font-size:13px; align-items:center;">Start
+      <select id="photos-start" style="flex:0 0 120px;">${timeSelectOptions(photoList.start)}</select>
+    </label>
+  </div>
+  <div class="add-form">
+    <input type="text" id="photos-name" placeholder="Group (e.g. Couple with bride's parents)" style="flex:2; min-width:180px;" />
+    <input type="text" id="photos-who" placeholder="Who is in it" style="flex:2; min-width:140px;" />
+    <input type="number" id="photos-min" min="1" step="1" value="3" title="Minutes" style="flex:0 0 70px;" />
+    <button class="primary" id="photos-add">Add group</button>
+  </div>`;
+
+  if (!sched.rows.length) {
+    html += `<div class="card"><p class="muted">No groups yet. Add the first one above, or <button class="icon-btn" id="photos-seed" style="display:inline; padding:0 4px; color:var(--primary);">start from the usual family list</button>.</p></div>`;
+  }
+  sched.rows.forEach(({g, n, at}) => {
+    html += `<div class="card tl-card photo-card" draggable="true" data-photo-id="${g.id}" style="padding:10px 16px; margin-bottom:8px;">
+      <div class="item-row" style="border:none; padding:0;">
+        <span class="tl-handle" title="Drag to reorder">&#10247;</span>
+        <span class="photo-num">${n}.</span>
+        <span class="photo-time">${minutesToTime(at)}</span>
+        <span class="photo-edit" data-photo-edit="name" data-id="${g.id}" style="flex:2; min-width:160px; font-weight:600;" title="Click to edit">${esc(g.name) || "<span class='muted'>Untitled group</span>"}</span>
+        <span class="photo-edit muted" data-photo-edit="who" data-id="${g.id}" style="flex:2; min-width:140px; font-size:13px; ${g.who ? "" : "font-style:italic;"}" title="Click to edit">${esc(g.who) || "+ Who is in it"}</span>
+        <input type="number" class="photo-min" data-photo-min="${g.id}" min="0" step="1" value="${photoMinutes(g)}" title="Minutes" />
+        <span class="muted" style="font-size:12px; flex:0 0 26px;">min</span>
+        <button class="icon-btn tl-fade" data-photo-remove="${g.id}" aria-label="Remove group">${TRASH_ICON}</button>
+      </div>
+    </div>`;
+  });
+  p.innerHTML = html;
+
+  const rerender = async () => { renderPhotoList(); await savePhotoList(); };
+  document.getElementById("photos-back").addEventListener("click", () => goToTab("timeline"));
+  document.getElementById("photos-export").addEventListener("click", async (e) => {
+    const b = e.currentTarget; b.disabled = true;
+    try { await exportPhotoListDocx(); } finally { b.disabled = false; }
+  });
+  document.getElementById("photos-start").addEventListener("change", (e) => { photoList.start = e.target.value; rerender(); });
+  const add = () => {
+    const name = document.getElementById("photos-name").value.trim();
+    if (!name) { document.getElementById("photos-name").focus(); return; }
+    photoList.groups.push({id: uid(), name, who: document.getElementById("photos-who").value.trim(),
+                           minutes: Number(document.getElementById("photos-min").value) || 3});
+    rerender();
+  };
+  document.getElementById("photos-add").addEventListener("click", add);
+  ["photos-name", "photos-who", "photos-min"].forEach(id =>
+    document.getElementById(id).addEventListener("keydown", (e) => { if (e.key === "Enter") add(); }));
+  const seedBtn = document.getElementById("photos-seed");
+  if (seedBtn) seedBtn.addEventListener("click", () => { photoList = seedPhotoList(); rerender(); });
+
+  p.querySelectorAll("[data-photo-edit]").forEach(el => {
+    el.addEventListener("click", (e) => {
+      const g = photoList.groups.find(x => x.id === e.currentTarget.dataset.id); if (!g) return;
+      const field = e.currentTarget.dataset.photoEdit;
+      openInputModal(field === "name" ? "Group" : "Who is in it", g[field] || "", (v) => {
+        if (field === "name" && !v.trim()) return;
+        g[field] = v.trim(); rerender();
+      });
+    });
+  });
+  p.querySelectorAll("[data-photo-min]").forEach(inp => {
+    inp.addEventListener("change", (e) => {
+      const g = photoList.groups.find(x => x.id === e.currentTarget.dataset.photoMin); if (!g) return;
+      g.minutes = Math.max(0, Number(e.currentTarget.value) || 0); rerender();
+    });
+  });
+  p.querySelectorAll("[data-photo-remove]").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      photoList.groups = photoList.groups.filter(x => x.id !== e.currentTarget.dataset.photoRemove); rerender();
+    });
+  });
+
+  // Reorder by dragging a card above or below another, as the timeline does.
+  let dragId = null;
+  const clear = () => p.querySelectorAll(".drag-over-top, .drag-over-bottom").forEach(c => c.classList.remove("drag-over-top", "drag-over-bottom"));
+  p.querySelectorAll(".photo-card").forEach(card => {
+    card.addEventListener("dragstart", (e) => {
+      if (["INPUT", "SELECT", "BUTTON"].includes(e.target.tagName)) { e.preventDefault(); return; }
+      dragId = card.dataset.photoId; card.classList.add("dragging");
+      e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", "");
+    });
+    card.addEventListener("dragend", () => { card.classList.remove("dragging"); clear(); dragId = null; });
+    card.addEventListener("dragover", (e) => {
+      if (!dragId || dragId === card.dataset.photoId) return;
+      e.preventDefault(); e.dataTransfer.dropEffect = "move";
+      const r = card.getBoundingClientRect();
+      card.classList.remove("drag-over-top", "drag-over-bottom");
+      card.classList.add(e.clientY < r.top + r.height / 2 ? "drag-over-top" : "drag-over-bottom");
+    });
+    card.addEventListener("dragleave", () => card.classList.remove("drag-over-top", "drag-over-bottom"));
+    card.addEventListener("drop", (e) => {
+      if (!dragId || dragId === card.dataset.photoId) return;
+      e.preventDefault();
+      const r = card.getBoundingClientRect();
+      const after = e.clientY >= r.top + r.height / 2;
+      const moving = photoList.groups.find(x => x.id === dragId); if (!moving) return;
+      const rest = photoList.groups.filter(x => x.id !== dragId);
+      const idx = rest.findIndex(x => x.id === card.dataset.photoId);
+      rest.splice(after ? idx + 1 : idx, 0, moving);
+      photoList.groups = rest; rerender();
+    });
+  });
+}
+
+async function exportPhotoListDocx() {
+  const {Document, Packer, Paragraph, HeadingLevel, Table, TableRow, TableCell,
+         TextRun, WidthType} = docx;
+  const sched = photoSchedule();
+  const children = [];
+  children.push(new Paragraph({text: "Group Photo Order", heading: HeadingLevel.TITLE}));
+  children.push(new Paragraph({
+    text: WEDDING_DATE.toLocaleDateString(undefined,
+      {weekday: "long", year: "numeric", month: "long", day: "numeric"})
+      + ` · starts ${normaliseTime(photoList.start) || photoList.start}, about ${sched.total} min, done by ${minutesToTime(sched.end)}`,
+    spacing: {after: 240},
+  }));
+  const cell = (kids, width) => new TableCell({
+    width: {size: width, type: WidthType.PERCENTAGE},
+    margins: {top: 60, bottom: 60, left: 80, right: 80},
+    children: kids,
+  });
+  const head = t => new Paragraph({children: [new TextRun({text: t, bold: true, size: 18})]});
+  const rows = [new TableRow({tableHeader: true, children: [
+    cell([head("#")], 6), cell([head("TIME")], 14), cell([head("MIN")], 8),
+    cell([head("GROUP")], 36), cell([head("WHO")], 36),
+  ]})];
+  sched.rows.forEach(({g, n, at}) => rows.push(new TableRow({children: [
+    cell([new Paragraph(String(n))], 6),
+    cell([new Paragraph({children: [new TextRun({text: minutesToTime(at), bold: true})]})], 14),
+    cell([new Paragraph(String(photoMinutes(g)))], 8),
+    cell([new Paragraph({children: [new TextRun({text: g.name || "", bold: true})]})], 36),
+    cell([new Paragraph(g.who || "")], 36),
+  ]})));
+  if (sched.rows.length) children.push(new Table({width: {size: 100, type: WidthType.PERCENTAGE}, rows}));
+  else children.push(new Paragraph({text: "No groups yet."}));
+  children.push(new Paragraph({
+    text: "Tip: have a helper with this list gather the next group while the current one is being shot.",
+    spacing: {before: 240},
+  }));
+
+  const doc = new Document({sections: [{children}]});
+  const blob = await Packer.toBlob(doc);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `group-photo-order-${new Date().toISOString().slice(0, 10)}.docx`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 // ---------------------------------------------------------------- Food ---
 // Nobody yet: the familiar "Unassigned" dropdown. Once someone is on it the
 // chips take the room, so adding another is a small "+" that opens a menu.
@@ -5828,7 +6041,10 @@ function renderTimeline() {
   const p = document.getElementById("panel-timeline");
   const sectionOptions = timelineSections.map(s => `<option value="${s.name}">${s.name}</option>`).join("");
   let html = `<div class="row" style="margin-bottom:12px; justify-content:space-between;">
-    <button id="t-add-section">+ Add section</button>
+    <span class="row" style="gap:8px;">
+      <button id="t-add-section">+ Add section</button>
+      <button id="t-photos" title="The order the photographer calls the family groups in">&#128247; Group photo order</button>
+    </span>
     <button id="t-export" title="Download the run sheet as a Word document">Download timeline</button>
   </div>
   <div class="add-form">
@@ -5898,6 +6114,7 @@ function renderTimeline() {
     setTimeout(() => { btn.disabled = false; btn.textContent = "Download timeline"; }, 2000);
   });
 
+  document.getElementById("t-photos").addEventListener("click", () => goToTab("photos"));
   document.getElementById("t-add-section").addEventListener("click", () => {
     openInputModal("Section name", "", (name) => {
       const trimmed = name.trim();
@@ -7003,6 +7220,11 @@ function renderDashboard() {
     await saveKey("wedding-food", food);
   }
   if (maySeed && food.sections.length) await applyLabelDrafts();
+  photoList = await loadKey("wedding-photo-list");
+  if ((!photoList || !Array.isArray(photoList.groups)) && maySeed) {
+    photoList = seedPhotoList();
+    await savePhotoList();
+  }
   shopList = (await loadKey("wedding-shop-list")) || [];
   storeOptions = (await loadKey("wedding-store-options")) || [];
   if (storeOptions.length === 0 && maySeed) {
