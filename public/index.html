@@ -405,6 +405,26 @@
     font-size: 14px; line-height: 1; padding: 0 3px; min-height: 0; opacity: 0.65;
   }
   .tl-chip button:hover { opacity: 1; }
+  .tl-add {
+    width: 24px; height: 24px; min-height: 0; padding: 0; border-radius: 50%;
+    border: 1px dashed var(--primary); background: none; color: var(--primary);
+    font-size: 16px; line-height: 1; font-weight: 600; display: inline-flex;
+    align-items: center; justify-content: center; cursor: pointer; flex: none;
+  }
+  .tl-add:hover, .tl-add[aria-expanded="true"] { background: var(--primary-light); border-style: solid; }
+  .who-menu {
+    position: absolute; z-index: 200; min-width: 160px; padding: 4px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+    max-height: 300px; overflow-y: auto;
+  }
+  .who-menu button {
+    display: block; width: 100%; text-align: left; border: none; background: none;
+    padding: 7px 10px; border-radius: 6px; font-size: 13px; min-height: 0; cursor: pointer; color: var(--ink);
+  }
+  .who-menu button:hover { background: var(--primary-light); color: var(--primary); }
+  .who-menu button.who-menu-action { color: var(--ink-soft); }
+  .who-menu hr { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
   .seat-zoom { display: inline-flex; align-items: center; gap: 2px; }
   .seat-zoom button { min-width: 28px; padding: 4px 6px; font-weight: 700; }
   .seat-zoom button:disabled { opacity: 0.4; cursor: default; }
@@ -5148,17 +5168,80 @@ async function exportTimelineDocx() {
 }
 
 // ---------------------------------------------------------------- Food ---
+// Nobody yet: the familiar "Unassigned" dropdown. Once someone is on it the
+// chips take the room, so adding another is a small "+" that opens a menu.
 function whoPickerHtml(who, attr, id) {
+  const chips = who.map(n => `<span class="tl-chip">${esc(n)}<button data-${attr}-unassign="${id}"
+      data-name="${esc(n)}" aria-label="Remove ${esc(n)}" title="Remove">&times;</button></span>`).join("");
+  if (who.length) {
+    return `${chips}<button type="button" class="tl-add" data-${attr}-assign-btn="${id}"
+      aria-label="Add someone" title="Add someone" aria-haspopup="menu" aria-expanded="false">+</button>`;
+  }
   const free = helperTags.filter(h => who.indexOf(h.name) === -1);
-  return `${who.map(n => `<span class="tl-chip">${esc(n)}<button data-${attr}-unassign="${id}"
-      data-name="${esc(n)}" aria-label="Remove ${esc(n)}" title="Remove">&times;</button></span>`).join("")}
-    <select data-${attr}-assign="${id}" title="Add someone">
-      <option value="">${who.length ? "+ Add" : "Unassigned"}</option>
+  return `<select data-${attr}-assign="${id}" title="Add someone">
+      <option value="">Unassigned</option>
       ${free.map(h => `<option value="${esc(h.name)}">${esc(h.name)}</option>`).join("")}
       <option value="__add_new__">+ Add new&hellip;</option>
       <option value="__manage__">&#9998; Manage tags&hellip;</option>
     </select>`;
 }
+// The "+" menu: everyone not already on the item, then the same two actions
+// the dropdown offers. One open at a time; outside click or Escape closes it.
+let whoMenuEl = null;
+function closeWhoMenu() {
+  if (!whoMenuEl) return;
+  const anchor = whoMenuEl._anchor;
+  if (anchor) anchor.setAttribute("aria-expanded", "false");
+  whoMenuEl.remove(); whoMenuEl = null;
+}
+function openWhoMenu(anchor, who, onPick) {
+  if (whoMenuEl && whoMenuEl._anchor === anchor) { closeWhoMenu(); return; }
+  closeWhoMenu();
+  const free = helperTags.filter(h => who.indexOf(h.name) === -1);
+  const menu = document.createElement("div");
+  menu.className = "who-menu"; menu.setAttribute("role", "menu");
+  menu.innerHTML = `${free.length ? free.map(h => `<button type="button" role="menuitem" data-name="${esc(h.name)}">${esc(h.name)}</button>`).join("")
+      : `<div class="muted" style="padding:6px 10px; font-size:12px;">Everyone is on it</div>`}
+    <hr>
+    <button type="button" role="menuitem" class="who-menu-action" data-action="__add_new__">+ Add new&hellip;</button>
+    <button type="button" role="menuitem" class="who-menu-action" data-action="__manage__">&#9998; Manage tags&hellip;</button>`;
+  menu._anchor = anchor;
+  document.body.appendChild(menu);
+  whoMenuEl = menu;
+  anchor.setAttribute("aria-expanded", "true");
+  const r = anchor.getBoundingClientRect();
+  const w = menu.offsetWidth, h = menu.offsetHeight;
+  let left = r.left, top = r.bottom + 4;
+  if (left + w > window.innerWidth - 8) left = Math.max(8, r.right - w);
+  // Below the button when it fits, above when that fits better, otherwise
+  // pinned to the bottom edge - the list scrolls inside itself.
+  if (top + h > window.innerHeight - 8) {
+    if (r.top - h - 4 >= 8) top = r.top - h - 4;
+    else top = Math.max(8, window.innerHeight - 8 - h);
+  }
+  left += window.scrollX; top += window.scrollY;
+  menu.style.left = left + "px"; menu.style.top = top + "px";
+  menu.addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    closeWhoMenu();
+    if (b.dataset.action === "__manage__") { openTagsModal("helpers"); return; }
+    if (b.dataset.action === "__add_new__") {
+      openInputModal("Helper name", "", (name) => {
+        const trimmed = name.trim(); if (!trimmed) return;
+        helperTags.push({id: uid(), name: trimmed});
+        saveKey("wedding-helper-tags", helperTags);
+        onPick(trimmed);
+      });
+      return;
+    }
+    onPick(b.dataset.name);
+  });
+  const first = menu.querySelector("button"); if (first) first.focus();
+}
+document.addEventListener("mousedown", (e) => {
+  if (whoMenuEl && !whoMenuEl.contains(e.target) && e.target !== whoMenuEl._anchor && !whoMenuEl._anchor.contains(e.target)) closeWhoMenu();
+});
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeWhoMenu(); });
 // Shared by the food table rows and the dish modal: the same two controls,
 // wired the same way, so adding someone here edits the same helper list the
 // to-do and timeline use.
@@ -5174,6 +5257,16 @@ function wireWhoPicker(root, attr, getList, setList, after) {
       const who = getList(id);
       if (who.indexOf(name) === -1) setList(id, who.concat([name]));
       await after(id);
+    });
+  });
+  root.querySelectorAll(`[data-${attr}-assign-btn]`).forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      const id = e.currentTarget.dataset[attr + "AssignBtn"];
+      openWhoMenu(e.currentTarget, getList(id), async (name) => {
+        const who = getList(id);
+        if (who.indexOf(name) === -1) setList(id, who.concat([name]));
+        await after(id);
+      });
     });
   });
   root.querySelectorAll(`[data-${attr}-unassign]`).forEach(btn => {
@@ -5760,19 +5853,7 @@ function renderTimeline() {
           </select>
           <span data-id="${t.id}" data-action="edit-event" style="flex:2; min-width:150px; cursor:pointer; border-bottom:1px dashed transparent;" title="Click to edit">${t.event}</span>
           <span class="muted" data-id="${t.id}" data-action="edit-duration" style="flex:0 0 90px; cursor:pointer; border-bottom:1px dashed transparent;" title="Click to edit">${t.duration || "+ Duration"}</span>
-          ${(() => {
-            const who = momentAssignees(t);
-            const free = helperTags.filter(h => who.indexOf(h.name) === -1);
-            return `<span class="tl-who">
-              ${who.map(n => `<span class="tl-chip">${esc(n)}<button data-tl-unassign="${t.id}"
-                  data-name="${esc(n)}" aria-label="Remove ${esc(n)}" title="Remove">&times;</button></span>`).join("")}
-              <select data-tl-assign="${t.id}" title="Add someone to this moment">
-                <option value="">${who.length ? "+ Add" : "Unassigned"}</option>
-                ${free.map(h => `<option value="${esc(h.name)}">${esc(h.name)}</option>`).join("")}
-                <option value="__add_new__">+ Add new&hellip;</option>
-                <option value="__manage__">&#9998; Manage tags&hellip;</option>
-              </select></span>`;
-          })()}
+          <span class="tl-who">${whoPickerHtml(momentAssignees(t), "tl", t.id)}</span>
           <button class="icon-btn tl-fade" data-id="${t.id}" data-action="remove" aria-label="Remove timeline entry">${TRASH_ICON}</button>
         </div>
         <div class="muted" data-id="${t.id}" data-action="edit-desc" style="font-size:13px; margin-top:6px; cursor:pointer; ${t.desc ? "" : "font-style:italic;"}" title="Click to edit">${t.desc || "+ Add description"}</div>
@@ -5803,34 +5884,11 @@ function renderTimeline() {
 
   p.innerHTML = html;
 
-  p.querySelectorAll("[data-tl-assign]").forEach(sel => {
-    sel.addEventListener("change", async (e) => {
-      const item = timeline.find(t => t.id === e.currentTarget.dataset.tlAssign);
-      if (!item) return;
-      // "+ Add new" and "Manage tags" are actions, not values - the shared
-      // handler owns those, and the list it edits is the to-do's list too.
-      if (handleAssigneeAction(e.currentTarget, "", async (name) => {
-        setMomentAssignees(item, momentAssignees(item).concat([name]));
-        renderTimeline();
-        await saveKey("wedding-timeline", timeline);
-      })) return;
-      const name = e.currentTarget.value;
-      if (!name) return;
-      const who = momentAssignees(item);
-      if (who.indexOf(name) === -1) setMomentAssignees(item, who.concat([name]));
-      renderTimeline();
-      await saveKey("wedding-timeline", timeline);
-    });
-  });
-  p.querySelectorAll("[data-tl-unassign]").forEach(btn => {
-    btn.addEventListener("click", async (e) => {
-      const item = timeline.find(t => t.id === e.currentTarget.dataset.tlUnassign);
-      if (!item) return;
-      setMomentAssignees(item, momentAssignees(item).filter(n => n !== e.currentTarget.dataset.name));
-      renderTimeline();
-      await saveKey("wedding-timeline", timeline);
-    });
-  });
+  // Same picker as the food table; the list it edits is the to-do's list too.
+  wireWhoPicker(p, "tl",
+    (id) => { const t = timeline.find(x => x.id === id); return t ? momentAssignees(t) : []; },
+    (id, list) => { const t = timeline.find(x => x.id === id); if (t) setMomentAssignees(t, list); },
+    async () => { renderTimeline(); await saveKey("wedding-timeline", timeline); });
 
   document.getElementById("t-export").addEventListener("click", async (e) => {
     const btn = e.currentTarget;
