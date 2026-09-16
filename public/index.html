@@ -5180,23 +5180,38 @@ async function exportTimelineDocx() {
 // and everything above it, so reordering or retiming one group moves the
 // rest.
 const PHOTO_SEED = {start: "4:30 pm", groups: [
-  {name: "Couple with both sets of parents", who: "Bride, Groom, both sets of parents", minutes: 3},
-  {name: "Couple with bride's parents", who: "Bride, Groom, bride's parents", minutes: 2},
-  {name: "Couple with bride's immediate family", who: "Bride, Groom, bride's parents & siblings", minutes: 3},
-  {name: "Couple with bride's extended family", who: "Grandparents, aunts, uncles, cousins", minutes: 3},
-  {name: "Couple with groom's parents", who: "Bride, Groom, groom's parents", minutes: 2},
-  {name: "Couple with groom's immediate family", who: "Bride, Groom, groom's parents & siblings", minutes: 3},
-  {name: "Couple with groom's extended family", who: "Grandparents, aunts, uncles, cousins", minutes: 3},
-  {name: "Couple with grandparents", who: "All grandparents", minutes: 2},
-  {name: "Couple with full bridal party", who: "Bridesmaids & groomsmen", minutes: 3},
-  {name: "Bride with bridesmaids", who: "Bridesmaids", minutes: 2},
-  {name: "Groom with groomsmen", who: "Groomsmen", minutes: 2},
-  {name: "Full guest group shot", who: "Everyone", minutes: 5},
+  {name: "Couple", who: "Bride & Groom", minutes: 5},
+  {name: "Couple with family", who: "Both families", minutes: 5},
+  {name: "Full bridal party", who: "Bridesmaids & groomsmen", minutes: 3},
 ]};
-let photoList = null;
-function seedPhotoList() {
-  return {start: PHOTO_SEED.start, groups: PHOTO_SEED.groups.map(g => ({id: uid(), ...g}))};
+const GUEST_PHOTO_MINUTES = 1;
+// One group per household that has said yes, in table order so the
+// photographer can call them table by table.
+function guestPhotoGroups() {
+  const seats = seatAssignments();
+  const tableNo = (g) => { const m = (seats[g.id] || "").match(/^T(\d+)/); return m ? Number(m[1]) : 999; };
+  return guests.filter(g => g.rsvp === "yes")
+    .map(g => ({guestId: g.id, table: tableNo(g), name: `Couple with ${g.name}`,
+                who: [g.name].concat((g.people || []).map(pr => pr.name).filter(Boolean)).join(", ")}))
+    .sort((a, b) => a.table - b.table || a.name.localeCompare(b.name));
 }
+function seedPhotoList() {
+  return {start: PHOTO_SEED.start, groups: PHOTO_SEED.groups.map(g => ({id: uid(), ...g}))
+    .concat(guestPhotoGroups().map(g => ({id: uid(), guestId: g.guestId, name: g.name, who: g.who, minutes: GUEST_PHOTO_MINUTES})))};
+}
+// Bring the guest groups in line with the guest list: households that have
+// since said yes are added at the end, ones that dropped out are removed,
+// and names follow the list. Hand-typed groups and the order are kept.
+function syncPhotoGuestGroups() {
+  const wanted = guestPhotoGroups();
+  const byId = {}; wanted.forEach(w => { byId[w.guestId] = w; });
+  photoList.groups = photoList.groups.filter(g => !g.guestId || byId[g.guestId]);
+  photoList.groups.forEach(g => { if (g.guestId) { g.name = byId[g.guestId].name; g.who = byId[g.guestId].who; } });
+  const have = new Set(photoList.groups.map(g => g.guestId).filter(Boolean));
+  wanted.filter(w => !have.has(w.guestId)).forEach(w =>
+    photoList.groups.push({id: uid(), guestId: w.guestId, name: w.name, who: w.who, minutes: GUEST_PHOTO_MINUTES}));
+}
+let photoList = null;
 function minutesToTime(total) {
   const m = ((total % 1440) + 1440) % 1440;
   let h = Math.floor(m / 60); const min = m % 60;
@@ -5219,7 +5234,10 @@ function renderPhotoList() {
   const sched = photoSchedule();
   let html = `<div class="row" style="justify-content:space-between; margin-bottom:14px;">
     <button id="photos-back" style="display:inline-flex; align-items:center; gap:6px;">&larr; Back to Timeline</button>
-    <button id="photos-export" title="Download the shot list as a Word document">Download photo order</button>
+    <span class="row" style="gap:8px;">
+      <button id="photos-sync" title="Add households that have said yes since, drop any that dropped out">Sync with guest list</button>
+      <button id="photos-export" title="Download the shot list as a Word document">Download photo order</button>
+    </span>
   </div>
   <div class="row" style="justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
     <div>
@@ -5240,7 +5258,7 @@ function renderPhotoList() {
   </div>`;
 
   if (!sched.rows.length) {
-    html += `<div class="card"><p class="muted">No groups yet. Add the first one above, or <button class="icon-btn" id="photos-seed" style="display:inline; padding:0 4px; color:var(--primary);">start from the usual family list</button>.</p></div>`;
+    html += `<div class="card"><p class="muted">No groups yet. Add the first one above, or <button class="icon-btn" id="photos-seed" style="display:inline; padding:0 4px; color:var(--primary);">start from the couple, family, bridal party and every guest household</button>.</p></div>`;
   }
   sched.rows.forEach(({g, n, at}) => {
     html += `<div class="card tl-card photo-card" draggable="true" data-photo-id="${g.id}" style="padding:10px 16px; margin-bottom:8px;">
@@ -5264,6 +5282,7 @@ function renderPhotoList() {
     const b = e.currentTarget; b.disabled = true;
     try { await exportPhotoListDocx(); } finally { b.disabled = false; }
   });
+  document.getElementById("photos-sync").addEventListener("click", () => { syncPhotoGuestGroups(); rerender(); });
   document.getElementById("photos-start").addEventListener("change", (e) => { photoList.start = e.target.value; rerender(); });
   const add = () => {
     const name = document.getElementById("photos-name").value.trim();
