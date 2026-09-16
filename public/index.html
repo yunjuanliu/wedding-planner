@@ -2723,6 +2723,10 @@ function parsePlusOneNames(raw) {
 }
 
 function blankDishes() { return new Array(DISHES_PER_GUEST).fill(""); }
+// A household is the host plus the guest rows under them. That is what is
+// seated and fed, so it is what every count uses; the stored partySize is
+// only kept in step with it for older readers of the data.
+function householdSize(g) { return 1 + (g.people || []).length; }
 
 // Builds the per-person rows once, from the old free-text field. The original
 // plusOne string is deliberately left in place: if a name parsed wrongly, the
@@ -2914,7 +2918,7 @@ document.getElementById("meal-combos-download").addEventListener("click", (e) =>
 function renderGuestsOverview() {
   const p = document.getElementById("guest-subpanel");
   const seats = seatAssignments();
-  const totalPeople = guests.reduce((s,g) => s + (Number(g.partySize)||0), 0);
+  const totalPeople = guests.reduce((s,g) => s + householdSize(g), 0);
   const drivingCount = guests.filter(g => g.transport === "Driving").length;
   const flyingCount = guests.filter(g => g.transport === "Flying").length;
   const totalKids = guests.reduce((s,g) => s + (Number(g.kids)||0), 0);
@@ -2976,7 +2980,7 @@ function renderGuestsOverview() {
         <input type="text" data-household-name data-id="${g.id}" value="${esc(g.name)}"
           placeholder="Household or guest name" autocomplete="off" data-lpignore="true" data-1p-ignore
           style="font-weight:600; width:100%;" />
-        <span class="muted" data-id="${g.id}" data-action="edit-partysize" style="cursor:pointer; border-bottom:1px dashed transparent;" title="Click to edit">${g.partySize}</span>
+        <span class="muted" title="Host plus the guests listed below">${householdSize(g)}</span>
         <select data-id="${g.id}" data-field="transport">
           <option value="" ${!g.transport?"selected":""}>—</option>
           <option value="Driving" ${g.transport==="Driving"?"selected":""}>Driving</option>
@@ -3031,7 +3035,9 @@ function renderGuestsOverview() {
     const name = document.getElementById("g-name").value.trim();
     const party = Number(document.getElementById("g-party").value) || 1;
     if (!name) return;
-    guests.push({id:uid(), name, partySize:party, plusOne:"", dietary:"", transport:"", accommodation:"", kids:0});
+    // A party of N is the host plus N-1 guest rows, left blank to name.
+    const people = Array.from({length: Math.max(0, party - 1)}, () => ({id: uid(), name: "", dishes: blankDishes()}));
+    guests.push({id:uid(), name, partySize:party, people, plusOne:"", dietary:"", transport:"", accommodation:"", kids:0});
     await saveKey("wedding-guests", guests);
     renderGuests();
   });
@@ -3155,6 +3161,7 @@ function renderGuestsOverview() {
       const g = guests.find(x => x.id === e.currentTarget.dataset.id);
       if (!g) return;
       g.people.push({id: uid(), name: "", dishes: blankDishes()});
+      g.partySize = householdSize(g);
       await saveKey("wedding-guests", guests);
       renderGuests();
       const rows = document.querySelectorAll(`[data-gid="${g.id}"][data-person-name]`);
@@ -3167,20 +3174,10 @@ function renderGuestsOverview() {
       if (!g) return;
       const pid = e.currentTarget.dataset.pid;
       g.people = g.people.filter(x => x.id !== pid);
+      g.partySize = householdSize(g);
       await saveKey("wedding-guests", guests);
       await forgetGuestKeys([pid]);
       renderGuests();
-    });
-  });
-  list.querySelectorAll("[data-action=edit-partysize]").forEach(el => {
-    el.addEventListener("click", (e) => {
-      const g = guests.find(x => x.id === e.currentTarget.dataset.id);
-      if (!g) return;
-      openInputModal("Party size", g.partySize || 1, async (raw) => {
-        g.partySize = Math.max(1, Number(raw) || 1);
-        await saveKey("wedding-guests", guests);
-        renderGuests();
-      }, "number");
     });
   });
 }
@@ -6449,7 +6446,7 @@ function parseGift(raw) {
 function giftPeople() {
   const fromGuests = guests
     .filter(g => (g.name || "").trim())
-    .map(g => ({id: g.id, name: g.name, size: Number(g.partySize) || 0, extra: false}));
+    .map(g => ({id: g.id, name: g.name, size: householdSize(g), extra: false}));
   const extras = (budget.giftExtras || [])
     .map(e => ({id: e.id, name: e.name, size: null, extra: true}));
   return fromGuests.concat(extras)
@@ -6966,7 +6963,7 @@ function renderShopList() {
 
 function renderDashboard() {
   const p = document.getElementById("panel-dashboard");
-  const totalPeople = guests.reduce((s,g) => s + (Number(g.partySize)||0), 0);
+  const totalPeople = guests.reduce((s,g) => s + householdSize(g), 0);
   const drivingCount = guests.filter(g => g.transport === "Driving").length;
   const flyingCount = guests.filter(g => g.transport === "Flying").length;
 
