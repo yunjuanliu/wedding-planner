@@ -5342,11 +5342,13 @@ async function exportVendorArrivalsDocx() {
 // and everything above it, so reordering or retiming one group moves the
 // rest.
 const PHOTO_SEED = {start: "4:30 pm", groups: [
-  {name: "Couple", who: "Bride & Groom", minutes: 5},
-  {name: "Couple with family", who: "Both families", minutes: 5},
-  {name: "Full bridal party", who: "Bridesmaids & groomsmen", minutes: 3},
+  {name: "Couple", who: "Bride & Groom", minutes: 3},
+  {name: "Couple with family", who: "Both families", minutes: 3},
+  {name: "Full bridal party", who: "Bridesmaids & groomsmen", minutes: 2},
 ]};
-const GUEST_PHOTO_MINUTES = 1;
+// Half a minute a household: walk up, one frame, walk off. Forty households
+// then fit inside the half hour with the three big groups.
+const GUEST_PHOTO_MINUTES = 0.5;
 // One group per household that has said yes, in table order so the
 // photographer can call them table by table.
 function guestPhotoGroups() {
@@ -5381,7 +5383,8 @@ function minutesToTime(total) {
   h = h % 12; if (h === 0) h = 12;
   return `${h}:${String(min).padStart(2, "0")} ${ap}`;
 }
-function photoMinutes(g) { const n = Number(g.minutes); return isFinite(n) && n > 0 ? n : 0; }
+function photoMinutes(g) { const n = Number(g.minutes); return isFinite(n) && n > 0 ? Math.round(n * 2) / 2 : 0; }
+function fmtMinutes(n) { return n === 0.5 ? "\u00bd" : String(n).replace(/\.5$/, "\u00bd"); }
 // Each group with the clock time it starts, plus the end of the whole run.
 function photoSchedule() {
   let at = timeToMinutes(photoList.start);
@@ -5405,7 +5408,7 @@ function renderPhotoList() {
     <div>
       <p class="section-title" style="margin:0 0 4px;">Group photo order</p>
       <span class="muted" style="font-size:13px;">${photoList.groups.length} group${photoList.groups.length === 1 ? "" : "s"}
-        &middot; ${sched.total} min &middot; ${normaliseTime(photoList.start) || photoList.start} &ndash; ${minutesToTime(sched.end)}
+        &middot; ${Math.ceil(sched.total)} min &middot; ${normaliseTime(photoList.start) || photoList.start} &ndash; ${minutesToTime(Math.ceil(sched.end))}
         &middot; drag to reorder, click a name to edit</span>
     </div>
     <label class="row" style="gap:8px; font-size:13px; align-items:center;">Start
@@ -5415,7 +5418,7 @@ function renderPhotoList() {
   <div class="add-form">
     <input type="text" id="photos-name" placeholder="Group (e.g. Couple with bride's parents)" style="flex:2; min-width:180px;" />
     <input type="text" id="photos-who" placeholder="Who is in it" style="flex:2; min-width:140px;" />
-    <input type="number" id="photos-min" min="1" step="1" value="3" title="Minutes" style="flex:0 0 70px;" />
+    <input type="number" id="photos-min" min="0.5" step="0.5" value="1" title="Minutes" style="flex:0 0 70px;" />
     <button class="primary" id="photos-add">Add group</button>
   </div>`;
 
@@ -5427,10 +5430,10 @@ function renderPhotoList() {
       <div class="item-row" style="border:none; padding:0;">
         <span class="tl-handle" title="Drag to reorder">&#10247;</span>
         <span class="photo-num">${n}.</span>
-        <span class="photo-time">${minutesToTime(at)}</span>
+        <span class="photo-time">${minutesToTime(Math.floor(at))}</span>
         <span class="photo-edit" data-photo-edit="name" data-id="${g.id}" style="flex:2; min-width:160px; font-weight:600;" title="Click to edit">${esc(g.name) || "<span class='muted'>Untitled group</span>"}</span>
         <span class="photo-edit muted" data-photo-edit="who" data-id="${g.id}" style="flex:2; min-width:140px; font-size:13px; ${g.who ? "" : "font-style:italic;"}" title="Click to edit">${esc(g.who) || "+ Who is in it"}</span>
-        <input type="number" class="photo-min" data-photo-min="${g.id}" min="0" step="1" value="${photoMinutes(g)}" title="Minutes" />
+        <input type="number" class="photo-min" data-photo-min="${g.id}" min="0" step="0.5" value="${photoMinutes(g)}" title="Minutes" />
         <span class="muted" style="font-size:12px; flex:0 0 26px;">min</span>
         <button class="icon-btn tl-fade" data-photo-remove="${g.id}" aria-label="Remove group">${TRASH_ICON}</button>
       </div>
@@ -5450,7 +5453,7 @@ function renderPhotoList() {
     const name = document.getElementById("photos-name").value.trim();
     if (!name) { document.getElementById("photos-name").focus(); return; }
     photoList.groups.push({id: uid(), name, who: document.getElementById("photos-who").value.trim(),
-                           minutes: Number(document.getElementById("photos-min").value) || 3});
+                           minutes: Number(document.getElementById("photos-min").value) || 1});
     rerender();
   };
   document.getElementById("photos-add").addEventListener("click", add);
@@ -5522,7 +5525,7 @@ async function exportPhotoListDocx() {
   children.push(new Paragraph({
     text: WEDDING_DATE.toLocaleDateString(undefined,
       {weekday: "long", year: "numeric", month: "long", day: "numeric"})
-      + ` · starts ${normaliseTime(photoList.start) || photoList.start}, about ${sched.total} min, done by ${minutesToTime(sched.end)}`,
+      + ` · starts ${normaliseTime(photoList.start) || photoList.start}, about ${Math.ceil(sched.total)} min, done by ${minutesToTime(Math.ceil(sched.end))}`,
     spacing: {after: 240},
   }));
   const cell = (kids, width) => new TableCell({
@@ -5537,8 +5540,8 @@ async function exportPhotoListDocx() {
   ]})];
   sched.rows.forEach(({g, n, at}) => rows.push(new TableRow({children: [
     cell([new Paragraph(String(n))], 6),
-    cell([new Paragraph({children: [new TextRun({text: minutesToTime(at), bold: true})]})], 14),
-    cell([new Paragraph(String(photoMinutes(g)))], 8),
+    cell([new Paragraph({children: [new TextRun({text: minutesToTime(Math.floor(at)), bold: true})]})], 14),
+    cell([new Paragraph(fmtMinutes(photoMinutes(g)))], 8),
     cell([new Paragraph({children: [new TextRun({text: g.name || "", bold: true})]})], 36),
     cell([new Paragraph(g.who || "")], 36),
   ]})));
