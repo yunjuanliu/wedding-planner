@@ -649,6 +649,11 @@
   .tl-handle:hover { color: var(--primary); }
   .tl-handle:active { cursor: grabbing; }
   .tl-fade { opacity: 0; transition: opacity 0.15s; }
+  .vendor-table td.vendor-arrived { text-align: center; }
+  .vendor-row.is-arrived td { color: var(--ink-soft); }
+  .vendor-row.is-arrived .vendor-name { text-decoration: line-through; }
+  .vendor-row .tl-fade { opacity: 0; }
+  .vendor-row:hover .tl-fade { opacity: 1; }
   .photo-num { flex: 0 0 26px; font-weight: 700; color: var(--ink-soft); text-align: right; }
   .photo-time { flex: 0 0 82px; font-weight: 600; color: var(--primary); background: var(--primary-light); border-radius: 8px; padding: 5px 8px; text-align: center; font-size: 13px; }
   .photo-min { flex: 0 0 62px; text-align: right; padding: 5px 6px; }
@@ -829,6 +834,7 @@
   <div id="panel-shoplist" class="panel"></div>
   <div id="panel-gifts" class="panel"></div>
   <div id="panel-photos" class="panel"></div>
+  <div id="panel-vendors" class="panel"></div>
   <div id="panel-guests" class="panel"></div>
   <div id="panel-budget" class="panel"></div>
   <div id="panel-activities" class="panel"></div>
@@ -1612,6 +1618,7 @@ function goToTab(name) {
   if (name === "shoplist") renderShopList();
   if (name === "gifts") renderGiftsPage();
   if (name === "photos") renderPhotoList();
+  if (name === "vendors") renderVendorArrivals();
   if (name === "food") renderFood();
 }
 
@@ -5171,6 +5178,164 @@ async function exportTimelineDocx() {
   return sorted.length;
 }
 
+// ---- Vendor arrivals --------------------------------------------------
+// Day-of check-in sheet: every vendor that turns up on the day, when they
+// are due, and a tick once they are here. Rows start from the Budget's
+// vendor list; contact details are read from there rather than copied.
+const VENDOR_STAYS_HOME = /tuxedo|hotel|insurance|airbnb|u-haul|uhaul|rental car/i;
+let vendorArrivals = [];
+function vendorLabel(v) { return (v.vendor || "").trim() || (v.category || "").trim() || "Vendor"; }
+function seedVendorArrivals() {
+  return budget.vendors.filter(v => !VENDOR_STAYS_HOME.test(v.category || ""))
+    .map(v => ({id: uid(), vendorId: v.id, name: vendorLabel(v), time: "", notes: "", arrived: false}));
+}
+function vendorOf(row) { return row.vendorId ? budget.vendors.find(v => v.id === row.vendorId) : null; }
+function vendorContact(row) {
+  const v = vendorOf(row); if (!v) return "";
+  return [v.contact, v.phone].map(x => (x || "").trim()).filter(x => x && x !== "NA").join(" · ");
+}
+// Vendors added to the Budget since are appended; rows keep their times.
+function syncVendorArrivals() {
+  const have = new Set(vendorArrivals.map(r => r.vendorId).filter(Boolean));
+  budget.vendors.filter(v => !VENDOR_STAYS_HOME.test(v.category || "") && !have.has(v.id))
+    .forEach(v => vendorArrivals.push({id: uid(), vendorId: v.id, name: vendorLabel(v), time: "", notes: "", arrived: false}));
+  vendorArrivals.forEach(r => { const v = vendorOf(r); if (v && vendorLabel(v) !== r.name && !r.renamed) r.name = vendorLabel(v); });
+}
+function sortedVendorArrivals() {
+  return [...vendorArrivals].sort((a, b) => {
+    const ta = a.time ? timeToMinutes(a.time) : Infinity, tb = b.time ? timeToMinutes(b.time) : Infinity;
+    return ta - tb || a.name.localeCompare(b.name);
+  });
+}
+async function saveVendorArrivals() { await saveKey("wedding-vendor-arrivals", vendorArrivals); }
+
+function renderVendorArrivals() {
+  const p = document.getElementById("panel-vendors");
+  const rows = sortedVendorArrivals();
+  const arrived = rows.filter(r => r.arrived).length, unset = rows.filter(r => !r.time).length;
+  const timeOpts = (sel) => `<option value="">&mdash;</option>` + TIME_OPTIONS.map(t =>
+    `<option value="${t}" ${t === normaliseTime(sel) ? "selected" : ""}>${t}</option>`).join("");
+  let html = `<div class="row" style="justify-content:space-between; margin-bottom:14px;">
+    <button id="vendors-back" style="display:inline-flex; align-items:center; gap:6px;">&larr; Back to Timeline</button>
+    <span class="row" style="gap:8px;">
+      <button id="vendors-sync" title="Add vendors that have been added to the Budget since">Sync with Budget vendors</button>
+      <button id="vendors-export" title="Download the check-in sheet as a Word document">Download vendor arrivals</button>
+    </span>
+  </div>
+  <p class="section-title" style="margin:0 0 4px;">Vendor arrivals</p>
+  <span class="muted" style="font-size:13px; display:block; margin-bottom:12px;">${rows.length} vendor${rows.length === 1 ? "" : "s"}
+    &middot; ${arrived} arrived${unset ? ` &middot; ${unset} without a time yet` : ""} &middot; click a note to edit</span>
+  <div class="add-form">
+    <input type="text" id="vendors-name" placeholder="Vendor (e.g. DJ, florist, ice delivery)" style="flex:2; min-width:180px;" />
+    <select id="vendors-time" style="flex:0 0 120px;">${timeOpts(DEFAULT_MOMENT_TIME)}</select>
+    <input type="text" id="vendors-notes" placeholder="Notes (where to unload, who meets them)" style="flex:2; min-width:160px;" />
+    <button class="primary" id="vendors-add">Add vendor</button>
+  </div>
+  <div class="card" style="padding:0; overflow:auto;">
+    <table class="vendor-table" style="width:100%; border-collapse:collapse;">
+      <thead><tr>
+        <th style="width:130px;">Arrives</th><th>Vendor</th><th>Contact</th><th>Notes</th>
+        <th style="width:70px; text-align:center;">Here</th><th style="width:40px;"></th>
+      </tr></thead>
+      <tbody>`;
+  if (!rows.length) html += `<tr><td colspan="6" class="muted" style="padding:14px;">No vendors yet. Add one above, or <button class="icon-btn" id="vendors-seed" style="display:inline; padding:0 4px; color:var(--primary);">start from the Budget's vendor list</button>.</td></tr>`;
+  rows.forEach(r => {
+    html += `<tr class="vendor-row ${r.arrived ? "is-arrived" : ""}" data-vendor-row="${r.id}">
+      <td><select data-vendor-time="${r.id}" style="font-weight:600; color:var(--primary); background:var(--primary-light); border:none; padding:5px 6px;">${timeOpts(r.time)}</select></td>
+      <td><span class="vendor-name photo-edit" data-vendor-edit="name" data-id="${r.id}" style="font-weight:600;" title="Click to edit">${esc(r.name)}</span></td>
+      <td class="muted" style="font-size:13px;">${esc(vendorContact(r)) || "&mdash;"}</td>
+      <td><span class="photo-edit muted" data-vendor-edit="notes" data-id="${r.id}" style="font-size:13px; ${r.notes ? "" : "font-style:italic;"}" title="Click to edit">${esc(r.notes) || "+ Add note"}</span></td>
+      <td class="vendor-arrived"><input type="checkbox" data-vendor-arrived="${r.id}" ${r.arrived ? "checked" : ""} aria-label="${esc(r.name)} has arrived" /></td>
+      <td><button class="icon-btn tl-fade" data-vendor-remove="${r.id}" aria-label="Remove ${esc(r.name)}">${TRASH_ICON}</button></td>
+    </tr>`;
+  });
+  html += `</tbody></table></div>`;
+  p.innerHTML = html;
+
+  const rerender = async () => { renderVendorArrivals(); await saveVendorArrivals(); };
+  document.getElementById("vendors-back").addEventListener("click", () => goToTab("timeline"));
+  document.getElementById("vendors-sync").addEventListener("click", () => { syncVendorArrivals(); rerender(); });
+  document.getElementById("vendors-export").addEventListener("click", async (e) => {
+    const b = e.currentTarget; b.disabled = true;
+    try { await exportVendorArrivalsDocx(); } finally { b.disabled = false; }
+  });
+  const seedBtn = document.getElementById("vendors-seed");
+  if (seedBtn) seedBtn.addEventListener("click", () => { vendorArrivals = seedVendorArrivals(); rerender(); });
+  const add = () => {
+    const name = document.getElementById("vendors-name").value.trim();
+    if (!name) { document.getElementById("vendors-name").focus(); return; }
+    vendorArrivals.push({id: uid(), vendorId: null, name, renamed: true, time: document.getElementById("vendors-time").value,
+                         notes: document.getElementById("vendors-notes").value.trim(), arrived: false});
+    rerender();
+  };
+  document.getElementById("vendors-add").addEventListener("click", add);
+  ["vendors-name", "vendors-notes"].forEach(id =>
+    document.getElementById(id).addEventListener("keydown", (e) => { if (e.key === "Enter") add(); }));
+
+  p.querySelectorAll("[data-vendor-time]").forEach(sel => sel.addEventListener("change", (e) => {
+    const r = vendorArrivals.find(x => x.id === e.currentTarget.dataset.vendorTime); if (!r) return;
+    r.time = e.currentTarget.value; rerender();
+  }));
+  p.querySelectorAll("[data-vendor-arrived]").forEach(cb => cb.addEventListener("change", (e) => {
+    const r = vendorArrivals.find(x => x.id === e.currentTarget.dataset.vendorArrived); if (!r) return;
+    r.arrived = e.currentTarget.checked; rerender();
+  }));
+  p.querySelectorAll("[data-vendor-edit]").forEach(el => el.addEventListener("click", (e) => {
+    const r = vendorArrivals.find(x => x.id === e.currentTarget.dataset.id); if (!r) return;
+    const field = e.currentTarget.dataset.vendorEdit;
+    openInputModal(field === "name" ? "Vendor" : "Notes", r[field] || "", (v) => {
+      if (field === "name") { if (!v.trim()) return; r.renamed = true; }
+      r[field] = v.trim(); rerender();
+    });
+  }));
+  p.querySelectorAll("[data-vendor-remove]").forEach(btn => btn.addEventListener("click", (e) => {
+    vendorArrivals = vendorArrivals.filter(x => x.id !== e.currentTarget.dataset.vendorRemove); rerender();
+  }));
+}
+
+async function exportVendorArrivalsDocx() {
+  const {Document, Packer, Paragraph, HeadingLevel, Table, TableRow, TableCell,
+         TextRun, WidthType} = docx;
+  const rows = sortedVendorArrivals();
+  const children = [];
+  children.push(new Paragraph({text: "Vendor Arrivals", heading: HeadingLevel.TITLE}));
+  children.push(new Paragraph({
+    text: WEDDING_DATE.toLocaleDateString(undefined,
+      {weekday: "long", year: "numeric", month: "long", day: "numeric"}),
+    spacing: {after: 240},
+  }));
+  const cell = (kids, width) => new TableCell({
+    width: {size: width, type: WidthType.PERCENTAGE},
+    margins: {top: 60, bottom: 60, left: 80, right: 80},
+    children: kids,
+  });
+  const head = t => new Paragraph({children: [new TextRun({text: t, bold: true, size: 18})]});
+  const trows = [new TableRow({tableHeader: true, children: [
+    cell([head("ARRIVES")], 14), cell([head("VENDOR")], 26), cell([head("CONTACT")], 26),
+    cell([head("NOTES")], 26), cell([head("HERE")], 8),
+  ]})];
+  rows.forEach(r => trows.push(new TableRow({children: [
+    cell([new Paragraph({children: [new TextRun({text: r.time ? normaliseTime(r.time) || r.time : "—", bold: true})]})], 14),
+    cell([new Paragraph({children: [new TextRun({text: r.name, bold: true})]})], 26),
+    cell([new Paragraph(vendorContact(r) || "")], 26),
+    cell([new Paragraph(r.notes || "")], 26),
+    cell([new Paragraph(r.arrived ? "☑" : "☐")], 8),
+  ]})));
+  if (rows.length) children.push(new Table({width: {size: 100, type: WidthType.PERCENTAGE}, rows: trows}));
+  else children.push(new Paragraph({text: "No vendors yet."}));
+
+  const doc = new Document({sections: [{children}]});
+  const blob = await Packer.toBlob(doc);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `vendor-arrivals-${new Date().toISOString().slice(0, 10)}.docx`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 // ---- Group photo order ------------------------------------------------
 // The shot list the photographer works down after the ceremony. Each group
 // has its own run time; the clock time is worked out from the start time
@@ -6060,6 +6225,7 @@ function renderTimeline() {
     <span class="row" style="gap:8px;">
       <button id="t-add-section">+ Add section</button>
       <button id="t-photos" title="The order the photographer calls the family groups in">&#128247; Group photo order</button>
+      <button id="t-vendors" title="When each vendor is due, and who has turned up">&#128666; Vendor arrivals</button>
     </span>
     <button id="t-export" title="Download the run sheet as a Word document">Download timeline</button>
   </div>
@@ -6131,6 +6297,7 @@ function renderTimeline() {
   });
 
   document.getElementById("t-photos").addEventListener("click", () => goToTab("photos"));
+  document.getElementById("t-vendors").addEventListener("click", () => goToTab("vendors"));
   document.getElementById("t-add-section").addEventListener("click", () => {
     openInputModal("Section name", "", (name) => {
       const trimmed = name.trim();
@@ -7236,6 +7403,11 @@ function renderDashboard() {
     await saveKey("wedding-food", food);
   }
   if (maySeed && food.sections.length) await applyLabelDrafts();
+  vendorArrivals = (await loadKey("wedding-vendor-arrivals")) || null;
+  if (!Array.isArray(vendorArrivals)) {
+    vendorArrivals = maySeed ? seedVendorArrivals() : [];
+    if (maySeed) await saveVendorArrivals();
+  }
   photoList = await loadKey("wedding-photo-list");
   if ((!photoList || !Array.isArray(photoList.groups)) && maySeed) {
     photoList = seedPhotoList();
