@@ -5774,13 +5774,19 @@ function renderFood() {
       });
     });
   });
+  // One sheet per click. Browsers let a click start one download; a second
+  // file from the same click is quietly dropped, so the button walks
+  // through the sheets and says which one is next.
   p.querySelectorAll("[data-food-labels]").forEach(btn => {
-    btn.addEventListener("click", async (e) => {
+    let next = 0;
+    btn.addEventListener("click", (e) => {
       const sec = food.sections.find(x => x.id === e.currentTarget.dataset.foodLabels);
       if (!sec) return;
-      const b = e.currentTarget; b.disabled = true;
-      const n = await exportLabelsSvg(sec);
-      b.textContent = `${n} labels`; setTimeout(() => { b.textContent = "Export labels"; b.disabled = false; }, 2000);
+      const b = e.currentTarget;
+      const sheets = exportLabelsSvg(sec, next);
+      next = (next + 1) % sheets;
+      b.textContent = next ? `Download sheet ${next + 1} of ${sheets}` : (sheets > 1 ? `Sheet ${sheets} of ${sheets} saved` : "Saved");
+      if (!next) setTimeout(() => { b.textContent = "Export labels"; }, 2500);
     });
   });
   p.querySelectorAll("[data-food-export]").forEach(btn => {
@@ -6207,12 +6213,13 @@ function labelSvg(d, ox, oy) {
   parts.push(`<g transform="translate(0,${dy.toFixed(1)})">${text.join("\n")}</g>`);
   return parts.join("\n");
 }
-async function exportLabelsSvg(sec) {
+// Saves one letter sheet (six labels) and returns how many sheets there are.
+function exportLabelsSvg(sec, sIdx) {
   const dishes = labelDishes(sec);
   if (!dishes.length) return 0;
   const sheets = Math.ceil(dishes.length / LABELS_PER_SHEET);
   const marginX = (SHEET_W - 2 * LABEL_W) / 2, marginY = (SHEET_H - 3 * LABEL_H) / 2;
-  for (let sIdx = 0; sIdx < sheets; sIdx++) {
+  {
     const page = dishes.slice(sIdx * LABELS_PER_SHEET, (sIdx + 1) * LABELS_PER_SHEET);
     const body = page.map((d, i) => {
       const col = i % 2, row = Math.floor(i / 2);
@@ -6235,10 +6242,8 @@ ${body}
     a.download = `labels-${sec.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-sheet${sIdx + 1}.svg`;
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 2000);
-    // the browser needs a beat between downloads started by one click
-    if (sIdx < sheets - 1) await new Promise(r => setTimeout(r, 350));
   }
-  return dishes.length;
+  return sheets;
 }
 
 function renderTimeline() {
