@@ -977,6 +977,10 @@
           <input type="text" id="dish-modal-en" placeholder="e.g. Beef Butter Brisket" style="width:100%;" />
         </div>
       </div>
+      <label class="field-label" for="dish-modal-tag">Label line (English)</label>
+      <input type="text" id="dish-modal-tag" placeholder="Slow-braised in butter and garlic" style="width:100%; margin-bottom:8px;" />
+      <label class="field-label" for="dish-modal-tagzh">标签描述</label>
+      <input type="text" id="dish-modal-tagzh" placeholder="黄油蒜香，慢炖入味" style="width:100%; margin-bottom:8px;" />
       <label class="field-label" for="dish-modal-ing">Ingredients</label>
       <input type="text" id="dish-modal-ing" placeholder="Beef brisket, butter, garlic" style="width:100%; margin-bottom:8px;" />
       <label class="field-label" for="dish-modal-ingzh">配料</label>
@@ -5964,6 +5968,8 @@ function openDishModal(id) {
   document.getElementById("dish-modal-desc").value = f.dish.desc || "";
   document.getElementById("dish-modal-zh").value = f.dish.nameZh || "";
   document.getElementById("dish-modal-en").value = f.dish.nameEn || "";
+  document.getElementById("dish-modal-tag").value = f.dish.labelDesc || "";
+  document.getElementById("dish-modal-tagzh").value = f.dish.labelDescZh || "";
   document.getElementById("dish-modal-ing").value = f.dish.ingredients || "";
   document.getElementById("dish-modal-ingzh").value = f.dish.ingredientsZh || "";
   renderDishModalWho();
@@ -5995,6 +6001,8 @@ document.getElementById("dish-modal-save").addEventListener("click", async () =>
   f.dish.desc = document.getElementById("dish-modal-desc").value.trim();
   f.dish.nameZh = document.getElementById("dish-modal-zh").value.trim();
   f.dish.nameEn = document.getElementById("dish-modal-en").value.trim();
+  f.dish.labelDesc = document.getElementById("dish-modal-tag").value.trim();
+  f.dish.labelDescZh = document.getElementById("dish-modal-tagzh").value.trim();
   f.dish.ingredients = document.getElementById("dish-modal-ing").value.trim();
   f.dish.ingredientsZh = document.getElementById("dish-modal-ingzh").value.trim();
   f.dish.assignees = dishModalWho.slice();
@@ -6170,6 +6178,18 @@ function labelSvg(d, ox, oy) {
     y += zhSize + 4;
     text.push(`<text x="${cx}" y="${y}" text-anchor="middle" font-family="${CJK_FONT}" font-size="${zhSize}" fill="${INK}">${x(zh)}</text>`);
   }
+  // A line of description in each language, italic, between the names and
+  // the ingredient list.
+  const tag = (d.labelDesc || "").trim(), tagZh = (d.labelDescZh || "").trim();
+  if (tag || tagZh) y += 6;
+  wrap(tag, 48).forEach(line => {
+    y += 15;
+    text.push(`<text x="${cx}" y="${y}" text-anchor="middle" font-family="${MENU_FONT}" font-size="12.5" font-style="italic" fill="${INK}">${x(line)}</text>`);
+  });
+  wrapZh(tagZh, 22).forEach(line => {
+    y += 16;
+    text.push(`<text x="${cx}" y="${y}" text-anchor="middle" font-family="${CJK_FONT}" font-size="12" fill="${INK}">${x(line)}</text>`);
+  });
   y += 14;
   text.push(`<line x1="${cx - 22}" y1="${y}" x2="${cx + 22}" y2="${y}" stroke="${INK}" stroke-width="0.9"/>`);
   y += 8;
