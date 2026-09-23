@@ -4904,19 +4904,21 @@ async function exportAreaDocx(section, area) {
   children.push(new Paragraph({text: "Material Checklist", heading: HeadingLevel.HEADING_1}));
   const materials = area.materials || [];
   if (materials.length) {
+    const AREA_COLS = docxCols([44, 28, 28]);
     const headerRow = new TableRow({
       tableHeader: true,
-      children: ["Item Name", "Quality", "Status"].map(h => new TableCell({
-        width: {size: 33, type: WidthType.PERCENTAGE},
+      children: ["Item Name", "Quality", "Status"].map((h, i) => new TableCell({
+        width: {size: AREA_COLS[i], type: WidthType.DXA},
         children: [new Paragraph({children: [new TextRun({text: h, bold: true})]})]
       }))
     });
     const rows = materials.map(m => new TableRow({
-      children: [m.item || "", materialQuality(m), m.done ? "Ready" : "Needed"].map(v => new TableCell({
+      children: [m.item || "", materialQuality(m), m.done ? "Ready" : "Needed"].map((v, i) => new TableCell({
+        width: {size: AREA_COLS[i], type: WidthType.DXA},
         children: [new Paragraph(v)]
       }))
     }));
-    children.push(new Table({width: {size: 100, type: WidthType.PERCENTAGE}, rows: [headerRow, ...rows]}));
+    children.push(new Table({width: {size: DOCX_CONTENT_W, type: WidthType.DXA}, columnWidths: AREA_COLS, rows: [headerRow, ...rows]}));
   } else {
     children.push(new Paragraph({text: "No materials added yet."}));
   }
@@ -4927,7 +4929,7 @@ async function exportAreaDocx(section, area) {
     children.push(new Paragraph({text: line, bullet: {level: 0}, spacing: {after: 120}}));
   });
 
-  const doc = new Document({sections: [{children}]});
+  const doc = new Document({sections: [{properties: {page: DOCX_PAGE}, children}]});
   const blob = await Packer.toBlob(doc);
   const safeName = `${section.label} - ${area.name}`.replace(/[\\/:*?"<>|]/g, "-");
   const url = URL.createObjectURL(blob);
@@ -5125,11 +5127,12 @@ async function exportTimelineDocx() {
   if (orphan.length) groups.push({name: "Unsectioned", items: orphan});
 
   const cell = (kids, width) => new TableCell({
-    width: {size: width, type: WidthType.PERCENTAGE},
+    width: {size: width, type: WidthType.DXA},
     margins: {top: 60, bottom: 60, left: 80, right: 80},
     children: kids,
   });
   const head = t => new Paragraph({children: [new TextRun({text: t, bold: true, size: 18})]});
+  const TL_COLS = docxCols([16, 14, 20, 50]);
 
   let any = false;
   groups.forEach(g => {
@@ -5138,14 +5141,14 @@ async function exportTimelineDocx() {
     children.push(new Paragraph({text: g.name, heading: HeadingLevel.HEADING_1, spacing: {before: 240, after: 80}}));
     const rows = [new TableRow({
       tableHeader: true,
-      children: [cell([head("WHEN")], 16), cell([head("HOW LONG")], 14),
-                 cell([head("WHO")], 20), cell([head("ACTION")], 50)],
+      children: [cell([head("WHEN")], TL_COLS[0]), cell([head("HOW LONG")], TL_COLS[1]),
+                 cell([head("WHO")], TL_COLS[2]), cell([head("ACTION")], TL_COLS[3])],
     })];
     g.items.forEach(t => {
       const action = [new Paragraph({children: [new TextRun({text: t.event || "", bold: true})]})];
       if (t.desc && t.desc.trim()) action.push(new Paragraph({text: t.desc.trim()}));
       rows.push(new TableRow({children: [
-        cell([new Paragraph({children: [new TextRun({text: normaliseTime(t.time) || t.time || "", bold: true})]})], 16),
+        cell([new Paragraph({children: [new TextRun({text: normaliseTime(t.time) || t.time || "", bold: true})]})], TL_COLS[0]),
         cell([new Paragraph(t.duration || "\u2014")], 14),
         // An unassigned row is called out rather than left blank: a blank
         // cell reads as "nothing needed" instead of "nobody yet".
@@ -5153,11 +5156,11 @@ async function exportTimelineDocx() {
           text: momentAssignees(t).join(", ") || "Unassigned",
           bold: momentAssignees(t).length > 0,
           italics: momentAssignees(t).length === 0,
-        })]})], 20),
-        cell(action, 50),
+        })]})], TL_COLS[2]),
+        cell(action, TL_COLS[3]),
       ]}));
     });
-    children.push(new Table({width: {size: 100, type: WidthType.PERCENTAGE}, rows}));
+    children.push(new Table({width: {size: DOCX_CONTENT_W, type: WidthType.DXA}, columnWidths: TL_COLS, rows}));
   });
 
   if (!any) children.push(new Paragraph({text: "No timeline entries yet."}));
@@ -5169,7 +5172,7 @@ async function exportTimelineDocx() {
     spacing: {before: 240},
   }));
 
-  const doc = new Document({sections: [{children}]});
+  const doc = new Document({sections: [{properties: {page: DOCX_PAGE}, children}]});
   const blob = await Packer.toBlob(doc);
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -5309,26 +5312,27 @@ async function exportVendorArrivalsDocx() {
     spacing: {after: 240},
   }));
   const cell = (kids, width) => new TableCell({
-    width: {size: width, type: WidthType.PERCENTAGE},
+    width: {size: width, type: WidthType.DXA},
     margins: {top: 60, bottom: 60, left: 80, right: 80},
     children: kids,
   });
   const head = t => new Paragraph({children: [new TextRun({text: t, bold: true, size: 18})]});
+  const VA_COLS = docxCols([14, 26, 26, 26, 8]);
   const trows = [new TableRow({tableHeader: true, children: [
-    cell([head("ARRIVES")], 14), cell([head("VENDOR")], 26), cell([head("CONTACT")], 26),
-    cell([head("NOTES")], 26), cell([head("HERE")], 8),
+    cell([head("ARRIVES")], VA_COLS[0]), cell([head("VENDOR")], VA_COLS[1]), cell([head("CONTACT")], VA_COLS[2]),
+    cell([head("NOTES")], VA_COLS[3]), cell([head("HERE")], VA_COLS[4]),
   ]})];
   rows.forEach(r => trows.push(new TableRow({children: [
-    cell([new Paragraph({children: [new TextRun({text: r.time ? normaliseTime(r.time) || r.time : "—", bold: true})]})], 14),
-    cell([new Paragraph({children: [new TextRun({text: r.name, bold: true})]})], 26),
-    cell([new Paragraph(vendorContact(r) || "")], 26),
-    cell([new Paragraph(r.notes || "")], 26),
-    cell([new Paragraph(r.arrived ? "☑" : "☐")], 8),
+    cell([new Paragraph({children: [new TextRun({text: r.time ? normaliseTime(r.time) || r.time : "—", bold: true})]})], VA_COLS[0]),
+    cell([new Paragraph({children: [new TextRun({text: r.name, bold: true})]})], VA_COLS[1]),
+    cell([new Paragraph(vendorContact(r) || "")], VA_COLS[2]),
+    cell([new Paragraph(r.notes || "")], VA_COLS[3]),
+    cell([new Paragraph(r.arrived ? "☑" : "☐")], VA_COLS[4]),
   ]})));
-  if (rows.length) children.push(new Table({width: {size: 100, type: WidthType.PERCENTAGE}, rows: trows}));
+  if (rows.length) children.push(new Table({width: {size: DOCX_CONTENT_W, type: WidthType.DXA}, columnWidths: VA_COLS, rows: trows}));
   else children.push(new Paragraph({text: "No vendors yet."}));
 
-  const doc = new Document({sections: [{children}]});
+  const doc = new Document({sections: [{properties: {page: DOCX_PAGE}, children}]});
   const blob = await Packer.toBlob(doc);
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -5533,30 +5537,31 @@ async function exportPhotoListDocx() {
     spacing: {after: 240},
   }));
   const cell = (kids, width) => new TableCell({
-    width: {size: width, type: WidthType.PERCENTAGE},
+    width: {size: width, type: WidthType.DXA},
     margins: {top: 60, bottom: 60, left: 80, right: 80},
     children: kids,
   });
   const head = t => new Paragraph({children: [new TextRun({text: t, bold: true, size: 18})]});
+  const PH_COLS = docxCols([6, 14, 8, 36, 36]);
   const rows = [new TableRow({tableHeader: true, children: [
-    cell([head("#")], 6), cell([head("TIME")], 14), cell([head("MIN")], 8),
-    cell([head("GROUP")], 36), cell([head("WHO")], 36),
+    cell([head("#")], PH_COLS[0]), cell([head("TIME")], PH_COLS[1]), cell([head("MIN")], PH_COLS[2]),
+    cell([head("GROUP")], PH_COLS[3]), cell([head("WHO")], PH_COLS[4]),
   ]})];
   sched.rows.forEach(({g, n, at}) => rows.push(new TableRow({children: [
-    cell([new Paragraph(String(n))], 6),
-    cell([new Paragraph({children: [new TextRun({text: minutesToTime(Math.floor(at)), bold: true})]})], 14),
-    cell([new Paragraph(fmtMinutes(photoMinutes(g)))], 8),
-    cell([new Paragraph({children: [new TextRun({text: g.name || "", bold: true})]})], 36),
-    cell([new Paragraph(g.who || "")], 36),
+    cell([new Paragraph(String(n))], PH_COLS[0]),
+    cell([new Paragraph({children: [new TextRun({text: minutesToTime(Math.floor(at)), bold: true})]})], PH_COLS[1]),
+    cell([new Paragraph(fmtMinutes(photoMinutes(g)))], PH_COLS[2]),
+    cell([new Paragraph({children: [new TextRun({text: g.name || "", bold: true})]})], PH_COLS[3]),
+    cell([new Paragraph(g.who || "")], PH_COLS[4]),
   ]})));
-  if (sched.rows.length) children.push(new Table({width: {size: 100, type: WidthType.PERCENTAGE}, rows}));
+  if (sched.rows.length) children.push(new Table({width: {size: DOCX_CONTENT_W, type: WidthType.DXA}, columnWidths: PH_COLS, rows}));
   else children.push(new Paragraph({text: "No groups yet."}));
   children.push(new Paragraph({
     text: "Tip: have a helper with this list gather the next group while the current one is being shot.",
     spacing: {before: 240},
   }));
 
-  const doc = new Document({sections: [{children}]});
+  const doc = new Document({sections: [{properties: {page: DOCX_PAGE}, children}]});
   const blob = await Packer.toBlob(doc);
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -6723,11 +6728,16 @@ function renderGiftsPage() {
   p.innerHTML = `
   <div class="row" style="justify-content:space-between; margin-bottom:14px;">
     <button id="back-to-budget-btn" style="display:inline-flex; align-items:center; gap:6px;">&larr; Back to Budget</button>
+    <button id="gifts-export" title="Download who gave what as a Word document">Download gifts</button>
   </div>
   <p class="section-title" style="margin:0 0 10px;">Wedding gifts</p>
   ` + giftsPageHtml();
 
   document.getElementById("back-to-budget-btn").addEventListener("click", () => goToTab("budget"));
+  document.getElementById("gifts-export").addEventListener("click", async (e) => {
+    const b = e.currentTarget; b.disabled = true;
+    try { await exportGiftsDocx(); } finally { b.disabled = false; }
+  });
 
   const addName = document.getElementById("gift-new-name");
   const addPerson = async () => {
@@ -6776,6 +6786,186 @@ function renderGiftsPage() {
   });
 }
 
+// ---- Budget & gift downloads ------------------------------------------
+// Both sheets carry money, so they are only reachable behind the passcode -
+// the buttons that call these live on pages that check budgetUnlocked.
+// Word tables need real widths. A width given as a percentage collapses the
+// table to a sliver in LibreOffice, Pages and Quick Look, so every table here
+// is laid out in DXA twips against a US Letter page: 12240 wide, 1440 margins,
+// leaving 9360 of content.
+const DOCX_PAGE = {size: {width: 12240, height: 15840}, margin: {top: 1080, bottom: 1080, left: 1440, right: 1440}};
+const DOCX_CONTENT_W = 9360;
+// Column widths from shares that need not add up to anything in particular;
+// the last one soaks up the rounding so the row always spans the table.
+function docxCols(shares, total) {
+  const width = total || DOCX_CONTENT_W;
+  const sum = shares.reduce((a, b) => a + b, 0);
+  const cols = shares.map(f => Math.round(width * f / sum));
+  cols[cols.length - 1] = width - cols.slice(0, -1).reduce((a, b) => a + b, 0);
+  return cols;
+}
+function docxTableHelpers() {
+  const {Paragraph, TableCell, TextRun, WidthType, AlignmentType, ShadingType} = docx;
+  const cell = (kids, width, opts) => new TableCell({
+    width: {size: width, type: WidthType.DXA},
+    margins: {top: 60, bottom: 60, left: 80, right: 80},
+    shading: (opts && opts.shade) ? {type: ShadingType.CLEAR, fill: opts.shade, color: "auto"} : undefined,
+    children: kids,
+  });
+  const para = (text, opts) => new Paragraph({
+    alignment: (opts && opts.right) ? AlignmentType.RIGHT : AlignmentType.LEFT,
+    children: [new TextRun({text: text == null ? "" : String(text),
+      bold: !!(opts && opts.bold), italics: !!(opts && opts.italics),
+      color: opts && opts.color, size: opts && opts.size})],
+  });
+  const head = t => new Paragraph({children: [new TextRun({text: t, bold: true, size: 18})]});
+  return {cell, para, head};
+}
+async function saveDocx(doc, filename) {
+  const blob = await docx.Packer.toBlob(doc);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+function giftRowsForExport() {
+  return giftPeople().map(g => {
+    const raw = (budget.gifts || {})[g.id] || "";
+    const r = parseGift(raw);
+    return {name: g.name, extra: g.extra, size: g.extra ? "" : String(g.size),
+            kind: r.kind, amount: r.amount, text: r.text};
+  });
+}
+
+async function exportBudgetDocx() {
+  const {Document, Paragraph, HeadingLevel, Table, TableRow, TextRun, WidthType} = docx;
+  const {cell, para, head} = docxTableHelpers();
+  const spent = budgetSpent();
+  const vendorTotal = budget.vendors.reduce((s, r) => s + (Number(r.amount) || 0), 0);
+  const expenseTotal = budget.expenses.reduce((s, r) => s + (Number(r.amount) || 0), 0);
+  const remaining = (Number(budget.total) || 0) - spent;
+  const gt = giftTotals();
+  const children = [];
+
+  children.push(new Paragraph({text: "Wedding Budget", heading: HeadingLevel.TITLE}));
+  children.push(new Paragraph({children: [new TextRun({
+    text: WEDDING_DATE.toLocaleDateString(undefined, {year: "numeric", month: "long", day: "numeric"})
+      + ` · downloaded ${new Date().toLocaleDateString()}`,
+    color: "666666"})], spacing: {after: 240}}));
+
+  children.push(new Paragraph({text: "Summary", heading: HeadingLevel.HEADING_1, spacing: {after: 80}}));
+  const sum = [
+    ["Total budget", budget.total ? fmtMoney(budget.total) : "—"],
+    ["Vendors", fmtMoney(vendorTotal)],
+    ["Other expenses", fmtMoney(expenseTotal)],
+    ["Spent", fmtMoney(spent)],
+    [remaining < 0 ? "Over budget" : "Remaining", fmtMoney(Math.abs(remaining))],
+    ["Gifts received", fmtMoney(gt.money) + (gt.gift ? ` + ${gt.gift} gift${gt.gift === 1 ? "" : "s"}` : "")],
+  ];
+  const SUM_COLS = docxCols([60, 40], 5600);
+  children.push(new Table({width: {size: 5600, type: WidthType.DXA}, columnWidths: SUM_COLS, rows: sum.map(([k, v], i) =>
+    new TableRow({children: [
+      cell([para(k, {bold: i >= 3})], SUM_COLS[0]),
+      cell([para(v, {right: true, bold: i >= 3, color: (i === 4 && remaining < 0) ? "C0392B" : undefined})], SUM_COLS[1]),
+    ]}))}));
+
+  children.push(new Paragraph({text: "Vendors", heading: HeadingLevel.HEADING_1, spacing: {before: 300, after: 80}}));
+  const V_COLS = docxCols([15, 14, 21, 8, 9, 10, 11, 12]);
+  const small = (text, opts) => para(text, Object.assign({size: 16}, opts));
+  const vHead = t => new Paragraph({children: [new TextRun({text: t, bold: true, size: 14})]});
+  const vRows = [new TableRow({tableHeader: true, children: [
+    cell([vHead("CATEGORY")], V_COLS[0], {shade: "EFEAFB"}), cell([vHead("VENDOR")], V_COLS[1], {shade: "EFEAFB"}),
+    cell([vHead("CONTACT")], V_COLS[2], {shade: "EFEAFB"}), cell([vHead("OWNER")], V_COLS[3], {shade: "EFEAFB"}),
+    cell([vHead("CONTRACT")], V_COLS[4], {shade: "EFEAFB"}), cell([vHead("PAID")], V_COLS[5], {shade: "EFEAFB"}),
+    cell([vHead("COST")], V_COLS[6], {shade: "EFEAFB"}), cell([vHead("NEXT STEPS")], V_COLS[7], {shade: "EFEAFB"}),
+  ]})];
+  budget.vendors.forEach(v => vRows.push(new TableRow({children: [
+    cell([small(v.category, {bold: true})], V_COLS[0]),
+    cell([small(v.vendor || "—")], V_COLS[1]),
+    cell([small([v.contact, v.phone].filter(x => (x || "").trim() && x !== "NA").join(" · ") || "—")], V_COLS[2]),
+    cell([small(v.owner || "")], V_COLS[3]),
+    cell([small(v.contract || "")], V_COLS[4]),
+    cell([small(v.paid || "")], V_COLS[5]),
+    cell([small(v.amount == null || v.amount === "" ? "—" : fmtMoney(Number(v.amount) || 0), {right: true})], V_COLS[6]),
+    cell([small(v.next || "")], V_COLS[7]),
+  ]})));
+  vRows.push(new TableRow({children: [
+    cell([small("Vendors total", {bold: true})], V_COLS[0]), cell([para("")], V_COLS[1]), cell([para("")], V_COLS[2]),
+    cell([para("")], V_COLS[3]), cell([para("")], V_COLS[4]), cell([para("")], V_COLS[5]),
+    cell([small(fmtMoney(vendorTotal), {right: true, bold: true})], V_COLS[6]), cell([para("")], V_COLS[7]),
+  ]}));
+  children.push(new Table({width: {size: DOCX_CONTENT_W, type: WidthType.DXA}, columnWidths: V_COLS, rows: vRows}));
+
+  children.push(new Paragraph({text: "Other expenses", heading: HeadingLevel.HEADING_1, spacing: {before: 300, after: 80}}));
+  if (budget.expenses.length) {
+    const X_COLS = docxCols([30, 50, 20]);
+    const xRows = [new TableRow({tableHeader: true, children: [
+      cell([head("CATEGORY")], X_COLS[0], {shade: "EFEAFB"}), cell([head("ITEM")], X_COLS[1], {shade: "EFEAFB"}),
+      cell([head("COST")], X_COLS[2], {shade: "EFEAFB"}),
+    ]})];
+    budget.expenses.forEach(x => xRows.push(new TableRow({children: [
+      cell([para(x.category || "—")], X_COLS[0]),
+      cell([para(x.name || "—")], X_COLS[1]),
+      cell([para(x.amount == null || x.amount === "" ? "—" : fmtMoney(Number(x.amount) || 0), {right: true})], X_COLS[2]),
+    ]})));
+    xRows.push(new TableRow({children: [
+      cell([para("Other expenses total", {bold: true})], X_COLS[0]), cell([para("")], X_COLS[1]),
+      cell([para(fmtMoney(expenseTotal), {right: true, bold: true})], X_COLS[2]),
+    ]}));
+    children.push(new Table({width: {size: DOCX_CONTENT_W, type: WidthType.DXA}, columnWidths: X_COLS, rows: xRows}));
+  } else {
+    children.push(new Paragraph({children: [new TextRun({text: "Nothing recorded.", italics: true, color: "777777"})]}));
+  }
+
+  children.push(new Paragraph({text: "Wedding gifts", heading: HeadingLevel.HEADING_1, pageBreakBefore: true, spacing: {after: 80}}));
+  children.push(giftsTable());
+  children.push(new Paragraph({children: [new TextRun({
+    text: `${gt.cash} gave money · ${gt.gift} gave a gift · ${gt.blank} of ${gt.households} not recorded yet`,
+    color: "666666"})], spacing: {before: 120}}));
+
+  await saveDocx(new Document({sections: [{properties: {page: DOCX_PAGE}, children}]}),
+    `wedding-budget-${new Date().toISOString().slice(0, 10)}.docx`);
+}
+
+// The gift table, shared by the full budget download and the gift-only one.
+function giftsTable() {
+  const {Table, TableRow, WidthType} = docx;
+  const {cell, para, head} = docxTableHelpers();
+  const gt = giftTotals();
+  const G_COLS = docxCols([52, 14, 34]);
+  const rows = [new TableRow({tableHeader: true, children: [
+    cell([head("HOUSEHOLD")], G_COLS[0], {shade: "EFEAFB"}), cell([head("GUESTS")], G_COLS[1], {shade: "EFEAFB"}),
+    cell([head("AMOUNT OR GIFT")], G_COLS[2], {shade: "EFEAFB"}),
+  ]})];
+  giftRowsForExport().forEach(g => rows.push(new TableRow({children: [
+    cell([para(g.name + (g.extra ? "  (not a guest)" : ""), {bold: true})], G_COLS[0]),
+    cell([para(g.size || "—", {right: true})], G_COLS[1]),
+    cell([para(g.kind === "money" ? fmtMoney(g.amount) : g.kind === "gift" ? g.text : "—",
+               {right: true, italics: g.kind === "none", color: g.kind === "none" ? "999999" : undefined})], G_COLS[2]),
+  ]})));
+  rows.push(new TableRow({children: [
+    cell([para("Total received", {bold: true})], G_COLS[0]), cell([para("")], G_COLS[1]),
+    cell([para(fmtMoney(gt.money), {right: true, bold: true})], G_COLS[2]),
+  ]}));
+  return new Table({width: {size: DOCX_CONTENT_W, type: WidthType.DXA}, columnWidths: G_COLS, rows});
+}
+
+async function exportGiftsDocx() {
+  const {Document, Paragraph, HeadingLevel, TextRun} = docx;
+  const gt = giftTotals();
+  const children = [
+    new Paragraph({text: "Wedding Gifts", heading: HeadingLevel.TITLE}),
+    new Paragraph({children: [new TextRun({
+      text: `${gt.households} households · ${gt.cash} gave money · ${gt.gift} gave a gift · ${gt.blank} not recorded yet · downloaded ${new Date().toLocaleDateString()}`,
+      color: "666666"})], spacing: {after: 240}}),
+    giftsTable(),
+  ];
+  await saveDocx(new Document({sections: [{properties: {page: DOCX_PAGE}, children}]}),
+    `wedding-gifts-${new Date().toISOString().slice(0, 10)}.docx`);
+}
+
 function renderBudget() {
   const p = document.getElementById("panel-budget");
   if (!budgetUnlocked) {
@@ -6795,6 +6985,9 @@ function renderBudget() {
   const remaining = (Number(budget.total) || 0) - spent;
   const pct = budget.total ? Math.min(100, Math.round(spent / budget.total * 100)) : 0;
   let html = `
+  <div class="row" style="justify-content:flex-end; margin-bottom:12px;">
+    <button id="b-export" title="Download vendors, other expenses and gifts as a Word document">Download budget</button>
+  </div>
   <div class="row" style="gap:14px; align-items:stretch; margin-bottom:16px; flex-wrap:wrap;">
   <button id="b-gifts" style="flex:1; min-width:220px; text-align:left; border:none; cursor:pointer; padding:0; font-family:inherit;">
     <div class="hero-banner" style="height:100%; padding:18px 20px; display:flex; flex-direction:column; justify-content:center; gap:10px; box-sizing:border-box;">
@@ -6879,6 +7072,10 @@ function renderBudget() {
   p.innerHTML = html;
 
   document.getElementById("b-gifts").addEventListener("click", () => goToTab("gifts"));
+  document.getElementById("b-export").addEventListener("click", async (e) => {
+    const b = e.currentTarget; b.disabled = true;
+    try { await exportBudgetDocx(); } finally { b.disabled = false; }
+  });
 
   const body = document.getElementById("v-body");
   const yes = v => /^(yes|paid in full)$/i.test((v || "").trim());
